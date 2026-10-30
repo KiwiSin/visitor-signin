@@ -1,0 +1,18 @@
+{
+  "id": "/kiosk",
+  "name": "Visitor Sign-In",
+  "short_name": "Sign In",
+  "description": "Reception sign-in for visitors, contractors and staff.",
+  "start_url": "/kiosk",
+  "scope": "/",
+  "display": "fullscreen",
+  "display_override": ["fullscreen", "standalone"],
+  "orientation": "any",
+  "background_color": "#1F2937",
+  "theme_color": "#0F766E",
+  "icons": [
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

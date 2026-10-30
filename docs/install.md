@@ -1,0 +1,85 @@
+# Install guide
+
+This guide takes you from an empty Docker host to iPads signing visitors in. Allow about an hour.
+
+## 1. Before you start
+
+| You need | Notes |
+| --- | --- |
+| A Docker host with Portainer | Any Linux server, NAS or VM. 1 CPU and 1 GB RAM is plenty. |
+| A web address | e.g. `visitors.yourcompany.co.nz`, added to your internal DNS and pointing at the Docker host. |
+| HTTPS | The iPads only work offline over HTTPS. Use the reverse proxy you already have (Nginx Proxy Manager, Traefik, Caddy). |
+| A way to send email | An SMTP relay (e.g. your Exchange server on port 25), or an SMTP account with a username and password. |
+| Two random strings | For `DB_PASSWORD` and `SECRET_KEY`. `openssl rand -hex 32` makes one. |
+
+The stack does **not** need to be reachable from the internet.
+
+## 2. Deploy the stack in Portainer
+
+1. **Stacks › Add stack**, name it `visitor-signin`, and choose **Repository**.
+2. Repository URL `https://github.com/KiwiSin/visitor-signin`, reference `refs/heads/main`, compose path `docker-compose.yml`.
+3. The repository is private, so turn on **Authentication**: your GitHub username and a personal access token (fine-grained, read-only access to this repository's contents).
+4. Under **Environment variables** add:
+
+   ```
+   DB_PASSWORD=<random string>
+   SECRET_KEY=<another random string>
+   APP_URL=https://visitors.yourcompany.co.nz
+   TZ=Pacific/Auckland
+   ```
+
+   Optional: `APP_PORT` (default 8080), `BACKUP_PATH` (e.g. `/mnt/nas/visitor-backups`), `BACKUP_HOUR` (default 2), `APP_VERSION` (default `latest`).
+5. The app image lives in GitHub Container Registry. If the package is private, add it once under **Registries › Add registry › Custom**: URL `ghcr.io`, your GitHub username, and a token with `read:packages`.
+6. **Deploy the stack.**
+
+Keep `SECRET_KEY` safe and never change it after setup: it encrypts stored passwords.
+
+## 3. Reverse proxy and HTTPS
+
+Add a proxy host for `visitors.yourcompany.co.nz` that forwards to `http://<docker-host>:8080`, with a certificate. For an internal-only name, a DNS-challenge Let's Encrypt certificate works well (Nginx Proxy Manager and Traefik both support it).
+
+## 4. Create the admin account
+
+1. In Portainer, open **Containers › visitor-signin-app-1 › Logs**.
+2. Copy the line that starts with `https://…/admin/setup?token=…` and open it.
+3. Enter your company name, your name, email and a password (10+ characters).
+
+The link only works until the first admin is created. If you lose it, restart the app container and a new one is printed.
+
+## 5. Set it up in Admin
+
+| Where | What to do |
+| --- | --- |
+| Settings › Email & alerts | Choose **SMTP relay (no login)**, mail server and port 25, *Send from* (e.g. `reception@…`), sender name. Save, then **Send test**. Set the reception shared mailbox and the Health & Safety contact. |
+| Staff & teams | Add staff, or download the CSV template, fill it in and **Import CSV**. Mark fire wardens. Give teams a shared mailbox if some staff have no email. |
+| Settings › Branding | Company name, logo (PNG), brand colour, wallpapers, emergency assembly point. |
+| Settings › Health & Safety | Your rules, the yes/no safety questions and which answer raises a flag, the privacy note and how long to keep records. |
+| Settings › Visit types | Which types show, and what each asks (company, email, vehicle rego, induction card, host, signature). |
+| Tablets | Add each iPad and pair it. |
+
+## 6. Set up each iPad
+
+1. Safari › `https://visitors.yourcompany.co.nz/kiosk`
+2. **Share › Add to Home Screen**, then open the **Sign In** icon.
+3. In Admin › Tablets, **Add tablet** (e.g. "Tablet 1 · Main entrance") and type the 6-digit code into the iPad. Set what it **opens to**, e.g. the warehouse tablet opens to Contractor.
+4. **Settings › Accessibility › Guided Access** on, with a passcode. Open the app and triple-click the top/side button to start it.
+5. **Settings › Display & Brightness › Auto-Lock › Never**, and keep it on power.
+
+To move a tablet or replace an iPad, click **Re-pair** in Admin and enter the new code.
+
+## 7. Check it works
+
+1. Sign yourself in on the iPad, choosing a colleague as host.
+2. Check they got the email, and that the dashboard shows you on site.
+3. Sign out on the iPad.
+4. Turn the iPad's Wi-Fi off, sign in again, turn it back on: the sign-in arrives within 20 seconds.
+
+## Troubleshooting
+
+| Problem | Fix |
+| --- | --- |
+| Emails not arriving | Settings › Email & alerts › *Recent emails* shows the error. Common causes: the relay doesn't allow the Docker host's IP; wrong port; the server needs STARTTLS. |
+| "Relay access denied" | Ask IT to allow the Docker host's IP on the receive connector (see `email-relay.md`). |
+| iPad shows "Offline" | Check its Wi-Fi and that it can open the address in Safari. Sign-ins are kept and sent when it reconnects. |
+| iPad asks for a code again | It was re-paired or removed in Admin. Make a new code in Admin › Tablets. |
+| Forgot the admin password | Another admin can add you again. If nobody can sign in, run `docker exec -it <db-container> psql -U visitor -c "delete from admin_users"`, restart the app and use the new setup link. |

@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Visitor Sign-In">
+  <rect width="512" height="512" rx="112" fill="#0F766E"/>
+  <path d="M248 128h88a32 32 0 0 1 32 32v192a32 32 0 0 1-32 32h-88" fill="none" stroke="#fff" stroke-width="34" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M132 256h170M240 194l62 62-62 62" fill="none" stroke="#fff" stroke-width="34" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="404" cy="108" r="44" fill="#FBBF24"/>
+  <path d="M384 108l14 14 26-28" fill="none" stroke="#0F766E" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

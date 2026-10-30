@@ -1,0 +1,9 @@
+node_modules
+web/dist
+.git
+.github
+.env
+data
+backups
+docs
+*.md

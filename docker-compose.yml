@@ -1,0 +1,67 @@
+# Visitor Sign-In — Portainer stack
+#
+# Portainer: Stacks > Add stack > Repository
+#   Repository URL:  https://github.com/KiwiSin/visitor-signin
+#   Reference:       refs/heads/main
+#   Compose path:    docker-compose.yml
+# Then add the environment variables listed in .env.example.
+
+services:
+  app:
+    image: ghcr.io/${GH_OWNER:-kiwisin}/visitor-signin:${APP_VERSION:-latest}
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://visitor:${DB_PASSWORD:?Set DB_PASSWORD}@db:5432/visitor
+      APP_URL: ${APP_URL:-http://localhost:8080}
+      SECRET_KEY: ${SECRET_KEY:?Set SECRET_KEY (any long random string)}
+      TZ: ${TZ:-Pacific/Auckland}
+      TRUST_PROXY: ${TRUST_PROXY:-true}
+    volumes:
+      - uploads:/data/uploads
+    ports:
+      - "${APP_PORT:-8080}:8080"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: visitor
+      POSTGRES_USER: visitor
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD}
+      TZ: ${TZ:-Pacific/Auckland}
+    volumes:
+      - db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U visitor -d visitor"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backup:
+    image: ghcr.io/${GH_OWNER:-kiwisin}/visitor-signin:${APP_VERSION:-latest}
+    command: ["node", "server/backup.js"]
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://visitor:${DB_PASSWORD:?Set DB_PASSWORD}@db:5432/visitor
+      BACKUP_HOUR: ${BACKUP_HOUR:-2}
+      BACKUP_KEEP_DAYS: ${BACKUP_KEEP_DAYS:-30}
+      TZ: ${TZ:-Pacific/Auckland}
+    volumes:
+      - uploads:/data/uploads:ro
+      - ${BACKUP_PATH:-backups}:/backups
+
+volumes:
+  db:
+  uploads:
+  backups:
