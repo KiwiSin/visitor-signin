@@ -12,6 +12,13 @@
   --warn-bg: #FEF3C7; --warn-ink: #78350F;
   --bad-bg: #FEE2E2; --bad-ink: #991B1B;
   --radius: 14px;
+  /* Theme (set from Admin › Settings › Branding) */
+  --bar-bg: #FFFFFF; --bar-ink: #111827;
+  --card-bg: #FFFFFF; --card-ink: #111827;
+  --card-muted: color-mix(in srgb, var(--card-ink) 72%, transparent);
+  --home-ink: #FFFFFF;
+  --banner-bg: #FEF3C7; --banner-ink: #78350F;
+  --nav-bg: #111827; --nav-ink: #E5E7EB;
   font-family: 'Plus Jakarta Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
   color: var(--ink);
   -webkit-font-smoothing: antialiased;
@@ -40,14 +47,14 @@ svg.ico { width: 1.25em; height: 1.25em; flex-shrink: 0; }
 }
 .k-bar {
   display: flex; justify-content: space-between; align-items: center; gap: 16px;
-  padding: 10px 16px; background: rgba(255,255,255,0.95); border-radius: 16px; min-height: 64px;
+  padding: 10px 16px; background: var(--bar-bg); color: var(--bar-ink); border-radius: 16px; min-height: 64px;
 }
 .k-logo { height: 44px; max-width: 260px; object-fit: contain; }
 .k-home-logo { height: 64px; max-width: 320px; object-fit: contain; }
 .k-chip { display: inline-flex; align-items: center; gap: 8px; padding: 10px 16px; background: #fff; border: 1px solid var(--line); border-radius: 999px; font-size: 15px; font-weight: 600; color: var(--ink-2); }
 .k-offline { background: var(--warn-bg); color: var(--warn-ink); border-color: transparent; }
 
-.k-home { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; color: #fff; text-align: center; }
+.k-home { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; color: var(--home-ink); text-align: center; }
 .k-time { font-size: clamp(64px, 11vw, 112px); font-weight: 800; letter-spacing: -0.03em; line-height: 1; text-shadow: 0 2px 16px rgba(0,0,0,0.35); }
 .k-date { font-size: clamp(18px, 2.4vw, 26px); font-weight: 500; text-shadow: 0 1px 8px rgba(0,0,0,0.4); }
 .k-welcome { margin-top: clamp(20px, 4vh, 44px); font-size: clamp(24px, 3.2vw, 36px); font-weight: 700; text-shadow: 0 1px 10px rgba(0,0,0,0.4); }
@@ -64,19 +71,19 @@ svg.ico { width: 1.25em; height: 1.25em; flex-shrink: 0; }
 .k-big:active, .k-btn:active, .k-tile:active { transform: scale(0.98); }
 .k-small-row { display: flex; gap: 14px; margin-top: 24px; flex-wrap: wrap; justify-content: center; }
 .k-small { display: inline-flex; align-items: center; gap: 8px; padding: 14px 22px; border-radius: 12px; background: #fff; border: 1px solid var(--line); font-size: 16px; font-weight: 600; color: var(--ink); }
-.k-banner { display: flex; align-items: center; gap: 10px; padding: 14px 18px; background: var(--warn-bg); color: var(--warn-ink); border-radius: 12px; font-size: 15px; }
+.k-banner { display: flex; align-items: center; gap: 10px; padding: 14px 18px; background: var(--banner-bg); color: var(--banner-ink); border-radius: 12px; font-size: 15px; }
 
-.k-steps { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 600; color: var(--muted); flex-wrap: wrap; justify-content: flex-end; }
-.k-steps .n { width: 28px; height: 28px; border-radius: 999px; background: var(--line); display: inline-flex; align-items: center; justify-content: center; font-size: 13px; }
+.k-steps { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 600; color: color-mix(in srgb, var(--bar-ink) 70%, transparent); flex-wrap: wrap; justify-content: flex-end; }
+.k-steps .n { width: 28px; height: 28px; border-radius: 999px; background: color-mix(in srgb, var(--bar-ink) 12%, transparent); display: inline-flex; align-items: center; justify-content: center; font-size: 13px; }
 .k-steps .on .n { background: var(--accent); color: var(--accent-ink); }
-.k-steps .on { color: var(--ink); }
+.k-steps .on { color: var(--bar-ink); }
 .k-steps .done .n { background: var(--ok-bg); color: var(--ok-ink); }
-.k-steps .sep { width: 24px; height: 2px; background: var(--line-2); }
+.k-steps .sep { width: 24px; height: 2px; background: color-mix(in srgb, var(--bar-ink) 25%, transparent); }
 .k-steps > span { display: inline-flex; align-items: center; gap: 8px; }
 
-.k-card { background: #fff; border: 1px solid var(--line); border-radius: 20px; padding: clamp(20px, 3vw, 32px) clamp(20px, 3.5vw, 40px); display: flex; flex-direction: column; gap: 20px; min-height: 0; flex: 1; overflow: auto; }
+.k-card { background: var(--card-bg); color: var(--card-ink); border: 1px solid color-mix(in srgb, var(--card-ink) 10%, transparent); border-radius: 20px; padding: clamp(20px, 3vw, 32px) clamp(20px, 3.5vw, 40px); display: flex; flex-direction: column; gap: 20px; min-height: 0; flex: 1; overflow: auto; }
 .k-card h1 { font-size: clamp(24px, 2.8vw, 30px); font-weight: 700; }
-.k-card .lead { font-size: 16px; color: var(--muted); margin-top: 6px; }
+.k-card .lead { font-size: 16px; color: var(--card-muted); margin-top: 6px; }
 .k-types { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; }
 .k-pill { min-height: 64px; border-radius: 14px; border: 2px solid var(--line-2); background: #fff; font-size: 17px; font-weight: 600; padding: 8px 12px; }
 .k-pill.on { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
@@ -103,7 +110,7 @@ svg.ico { width: 1.25em; height: 1.25em; flex-shrink: 0; }
 
 .k-safety { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; flex: 1; min-height: 0; }
 @media (max-width: 860px) { .k-safety { grid-template-columns: 1fr; overflow: auto; } }
-.k-hs-text { overflow: auto; font-size: 15.5px; line-height: 1.6; color: var(--ink-2); white-space: pre-wrap; padding-right: 6px; user-select: text; }
+.k-hs-text { overflow: auto; font-size: 15.5px; line-height: 1.6; color: var(--card-ink); white-space: pre-wrap; padding-right: 6px; user-select: text; }
 .k-q { display: flex; justify-content: space-between; align-items: center; gap: 12px; font-size: 15px; font-weight: 500; }
 .k-yn { display: flex; gap: 6px; flex-shrink: 0; }
 .k-yn button { height: 46px; min-width: 66px; border-radius: 10px; border: 2px solid var(--line-2); background: #fff; font-weight: 700; }
@@ -115,15 +122,15 @@ svg.ico { width: 1.25em; height: 1.25em; flex-shrink: 0; }
 .k-check { display: flex; align-items: center; gap: 12px; background: none; border: none; padding: 0; text-align: left; font-size: 15.5px; }
 .k-check .box { width: 34px; height: 34px; border-radius: 8px; border: 2px solid #9CA3AF; flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; color: #fff; }
 .k-check.on .box { background: var(--accent); border-color: var(--accent); }
-.k-privacy { font-size: 12.5px; color: var(--muted); line-height: 1.5; }
+.k-privacy { font-size: 12.5px; color: var(--card-muted); line-height: 1.5; }
 
 .k-done { flex: 1; display: flex; align-items: center; justify-content: center; }
-.k-done-card { background: #fff; border-radius: 22px; padding: 40px; max-width: 560px; display: flex; flex-direction: column; gap: 18px; box-shadow: 0 16px 40px rgba(0,0,0,0.2); }
+.k-done-card { background: var(--card-bg); color: var(--card-ink); border-radius: 22px; padding: 40px; max-width: 560px; display: flex; flex-direction: column; gap: 18px; box-shadow: 0 16px 40px rgba(0,0,0,0.2); }
 .k-done-card .tick { width: 88px; height: 88px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); display: flex; align-items: center; justify-content: center; }
 .k-done-card h1 { font-size: 36px; font-weight: 800; letter-spacing: -0.02em; line-height: 1.1; }
-.k-done-card p { font-size: 18px; line-height: 1.5; color: var(--ink-2); }
+.k-done-card p { font-size: 18px; line-height: 1.5; color: var(--card-ink); }
 
-.k-row { display: flex; align-items: center; gap: 16px; padding: 14px 18px; border: 1.5px solid var(--line); border-radius: 14px; }
+.k-row { display: flex; align-items: center; gap: 16px; padding: 14px 18px; border: 1.5px solid color-mix(in srgb, var(--card-ink) 14%, transparent); border-radius: 14px; }
 .k-row .grow { flex: 1; min-width: 0; }
 .k-list { display: flex; flex-direction: column; gap: 10px; overflow: auto; }
 .k-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px; overflow: auto; align-content: start; }
@@ -144,15 +151,15 @@ svg.ico { width: 1.25em; height: 1.25em; flex-shrink: 0; }
 .a-auth img { height: 40px; align-self: flex-start; }
 .a-auth h1 { font-size: 24px; font-weight: 800; }
 .a-shell { min-height: 100%; display: flex; flex-wrap: wrap; }
-.a-nav { flex: 1 1 230px; max-width: 250px; background: #111827; color: #E5E7EB; padding: 22px 14px; display: flex; flex-direction: column; gap: 4px; }
-.a-nav .brand { display: flex; align-items: center; gap: 10px; margin: 0 6px 22px; font-weight: 700; color: #fff; }
+.a-nav { flex: 1 1 230px; max-width: 250px; background: var(--nav-bg); color: var(--nav-ink); padding: 22px 14px; display: flex; flex-direction: column; gap: 4px; }
+.a-nav .brand { display: flex; align-items: center; gap: 10px; margin: 0 6px 22px; font-weight: 700; color: var(--nav-ink); }
 .a-nav .brand img { height: 34px; max-width: 180px; object-fit: contain; }
-.a-nav a { padding: 11px 14px; border-radius: 10px; color: #D1D5DB; text-decoration: none; font-size: 15px; display: flex; align-items: center; gap: 10px; }
-.a-nav a.active { background: #1F2937; color: #fff; font-weight: 600; }
-.a-nav a:hover { color: #fff; }
+.a-nav a { padding: 11px 14px; border-radius: 10px; color: color-mix(in srgb, var(--nav-ink) 85%, transparent); text-decoration: none; font-size: 15px; display: flex; align-items: center; gap: 10px; }
+.a-nav a.active { background: color-mix(in srgb, var(--nav-ink) 12%, transparent); color: var(--nav-ink); font-weight: 600; }
+.a-nav a:hover { color: var(--nav-ink); }
 .a-nav .spacer { flex: 1; }
-.a-nav .who { font-size: 13px; color: #9CA3AF; padding: 8px 14px; }
-.a-nav button.link { background: none; border: none; color: #D1D5DB; text-align: left; padding: 11px 14px; border-radius: 10px; font-size: 15px; }
+.a-nav .who { font-size: 13px; color: color-mix(in srgb, var(--nav-ink) 65%, transparent); padding: 8px 14px; }
+.a-nav button.link { background: none; border: none; color: color-mix(in srgb, var(--nav-ink) 85%, transparent); text-align: left; padding: 11px 14px; border-radius: 10px; font-size: 15px; }
 @media (max-width: 760px) {
   .a-nav { max-width: none; flex-direction: row; flex-wrap: wrap; padding: 12px; }
   .a-nav .brand { width: 100%; margin-bottom: 8px; }

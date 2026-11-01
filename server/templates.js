@@ -21,6 +21,16 @@ export function formatDateTime(date) {
   }).format(new Date(date));
 }
 
+/** True when a colour is dark enough that light text/logos belong on it. */
+export function isDark(hex) {
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex || '');
+  if (!m) return true;
+  const n = parseInt(m[1], 16);
+  const lin = (c) => { const v = c / 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; };
+  const L = 0.2126 * lin(n >> 16) + 0.7152 * lin((n >> 8) & 255) + 0.0722 * lin(n & 255);
+  return L < 0.179; // white text reads better than black below this
+}
+
 function absolute(url) {
   if (!url) return null;
   return /^https?:\/\//.test(url) ? url : `${config.appUrl}${url.startsWith('/') ? '' : '/'}${url}`;
@@ -32,7 +42,8 @@ function absolute(url) {
  */
 export function arrivalEmail({ branding, visit, kind }) {
   const accent = /^#[0-9a-f]{6}$/i.test(branding.accent) ? branding.accent : '#0F766E';
-  const logo = absolute(branding.logo);
+  const accentText = /^#[0-9a-f]{6}$/i.test(branding.colors?.accentText || '') ? branding.colors.accentText : '#ffffff';
+  const logo = absolute(isDark(accent) ? (branding.logo || branding.logoOnLight) : (branding.logoOnLight || branding.logo));
   const first = (visit.hostName || '').split(' ')[0];
   const when = formatTime(visit.signedInAt);
   const flaggedRows = (visit.answers || []).filter((a) => a.flagged);
@@ -74,7 +85,7 @@ export function arrivalEmail({ branding, visit, kind }) {
 
   const html = `<!doctype html><html><body style="margin:0;padding:24px;background:#F3F4F6;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#111827">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;margin:0 auto;background:#ffffff;border-radius:10px;overflow:hidden">
-<tr><td style="background:${accent};padding:18px 24px;color:#ffffff;font-size:16px;font-weight:700">
+<tr><td style="background:${accent};padding:18px 24px;color:${accentText};font-size:16px;font-weight:700">
 ${logo ? `<img src="${esc(logo)}" alt="${esc(branding.companyName)}" height="36" style="display:block;max-height:36px">` : esc(branding.companyName)}
 </td></tr>
 <tr><td style="padding:24px">

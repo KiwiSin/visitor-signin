@@ -7,8 +7,8 @@ import { onSite, signIn, signOut } from '../visits.js';
 const pairLimit = makeLimiter({ max: 10, windowMs: 10 * 60 * 1000 });
 
 export function publicBranding(branding) {
-  const { appName, companyName, accent, welcome, subtitle, locationName, assemblyPoint, logo, wallpapers, wallpaper, rotateWallpapers, scrim } = branding;
-  return { appName, companyName, accent, welcome, subtitle, locationName, assemblyPoint, logo, wallpapers, wallpaper, rotateWallpapers, scrim };
+  const { appName, companyName, accent, welcome, subtitle, locationName, assemblyPoint, logo, logoOnLight, theme, colors, wallpapers, wallpaper, rotateWallpapers, scrim } = branding;
+  return { appName, companyName, accent, welcome, subtitle, locationName, assemblyPoint, logo, logoOnLight, theme, colors, wallpapers, wallpaper, rotateWallpapers, scrim };
 }
 
 export default async function kioskRoutes(app) {

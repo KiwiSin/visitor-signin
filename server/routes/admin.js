@@ -347,6 +347,12 @@ export default async function adminRoutes(app) {
           locationName: str(b.locationName, 60) || d.locationName,
           assemblyPoint: str(b.assemblyPoint, 120),
           logo: typeof b.logo === 'string' && (b.logo === '' || b.logo.startsWith('/uploads/')) ? (b.logo || null) : current.branding.logo,
+          logoOnLight: typeof b.logoOnLight === 'string' && (b.logoOnLight === '' || b.logoOnLight.startsWith('/uploads/')) ? (b.logoOnLight || null) : current.branding.logoOnLight,
+          theme: str(b.theme, 40) || current.branding.theme,
+          colors: Object.fromEntries(Object.entries(DEFAULTS.branding.colors).map(([k, def]) => {
+            const v = b.colors?.[k];
+            return [k, HEX_RE.test(v || '') ? v.toUpperCase() : (current.branding.colors?.[k] || def)];
+          })),
           wallpapers: Array.isArray(b.wallpapers)
             ? b.wallpapers.filter((w) => typeof w === 'string' && (w.startsWith('/uploads/') || w.startsWith('/wallpapers/'))).slice(0, 12)
             : current.branding.wallpapers,

@@ -21,7 +21,17 @@ export const DEFAULTS = {
     subtitle: "Please sign in so we know you're here and can let your host know.",
     locationName: 'Main Reception',
     assemblyPoint: 'the front car park',
-    logo: null,                        // uploaded file URL, or null for the built-in logo
+    logo: null,                        // logo for DARK backgrounds (home screen over the wallpaper); null = built-in
+    logoOnLight: null,                 // logo for LIGHT backgrounds (white bars, sign-in page, emails); null = built-in
+    theme: 'teal',                     // the preset last chosen (colours below can be changed one by one)
+    colors: {
+      accentText: '#FFFFFF',           // text on buttons
+      barBg: '#FFFFFF', barText: '#111827',       // top bar on the sign-in screens
+      cardBg: '#FFFFFF', cardText: '#111827',     // the white panels
+      homeText: '#FFFFFF',                        // clock and welcome text over the wallpaper
+      bannerBg: '#FEF3C7', bannerText: '#78350F', // emergency assembly point banner
+      navBg: '#111827', navText: '#E5E7EB',       // admin sidebar
+    },
     wallpapers: ['/wallpapers/mountains.jpg', '/wallpapers/coast.jpg', '/wallpapers/bush.jpg'],
     wallpaper: 0,                      // index into wallpapers
     rotateWallpapers: false,

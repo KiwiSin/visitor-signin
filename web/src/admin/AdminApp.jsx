@@ -3,6 +3,7 @@ import { NavLink, Navigate, Route, Routes, useLocation, useNavigate } from 'reac
 import { api } from '../api.js';
 import { IconCog, IconHome, IconList, IconStaff, IconTablet, IconWarn } from '../icons.jsx';
 import Dashboard from './Dashboard.jsx';
+import { applyTheme, colorsOf, logoFor } from '../theme.js';
 import RollCalls from './RollCalls.jsx';
 import Settings from './Settings.jsx';
 import Staff from './Staff.jsx';
@@ -18,7 +19,7 @@ export default function AdminApp() {
     const [s, b] = await Promise.all([api('/api/auth/status'), api('/api/public/branding')]);
     setStatus(s);
     setBranding(b);
-    if (b?.accent) document.documentElement.style.setProperty('--accent', b.accent);
+    applyTheme(b);
     document.title = `${b?.appName || 'Visitor Sign-In'} · Admin`;
   }, []);
   useEffect(() => { load().catch(() => setStatus({ error: true })); }, [load]);
@@ -53,7 +54,7 @@ function Shell({ user, branding, onLogout, children }) {
   return (
     <div className="a-shell">
       <nav className="a-nav" aria-label="Admin">
-        <div className="brand"><img src="/logo-white.svg" alt={branding?.appName || 'Visitor Sign-In'} /></div>
+        <div className="brand"><img src={logoFor(branding, colorsOf(branding).navBg)} alt={branding?.companyName || 'Visitor Sign-In'} /></div>
         <NavLink end to="/admin"><IconHome /> Dashboard</NavLink>
         <NavLink to="/admin/visits"><IconList /> Visitor log</NavLink>
         <NavLink to="/admin/staff"><IconStaff /> Staff &amp; teams</NavLink>
@@ -88,7 +89,7 @@ function Login({ onDone, branding }) {
   return (
     <div className="a-center">
       <form className="a-auth" onSubmit={submit}>
-        <img src={branding?.logo || '/logo.svg'} alt={branding?.companyName || 'Visitor Sign-In'} />
+        <img src={logoFor(branding, '#FFFFFF')} alt={branding?.companyName || 'Visitor Sign-In'} />
         <h1>Admin sign in</h1>
         <label className="a-field">Email<input className="a-input" type="email" autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} required /></label>
         <label className="a-field">Password<input className="a-input" type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} required /></label>

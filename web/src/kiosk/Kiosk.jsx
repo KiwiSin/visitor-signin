@@ -3,6 +3,7 @@ import { api, ApiError, fmtTime, initials } from '../api.js';
 import { IconCheck, IconPin, IconSearch, IconSignIn, IconSignOut, IconStaff, IconWarn, IconWifiOff } from '../icons.jsx';
 import SignaturePad from './SignaturePad.jsx';
 import RollCall from '../rollcall/RollCall.jsx';
+import { applyTheme, colorsOf, isDark, logoFor } from '../theme.js';
 
 const TOKEN_KEY = 'vs_kiosk_token';
 const CACHE_KEY = 'vs_kiosk_cache';
@@ -92,9 +93,9 @@ export default function Kiosk() {
 
   const branding = data?.branding;
   useEffect(() => {
-    if (branding?.accent) document.documentElement.style.setProperty('--accent', branding.accent);
+    applyTheme(branding);
     document.title = branding?.companyName ? `Sign in · ${branding.companyName}` : 'Visitor Sign-In';
-  }, [branding?.accent, branding?.companyName]);
+  }, [branding]);
 
   // Wallpaper (optionally rotating every 60 seconds).
   const wallpapers = branding?.wallpapers?.length ? branding.wallpapers : ['/wallpapers/mountains.jpg'];
@@ -160,7 +161,7 @@ export default function Kiosk() {
   const types = data.types;
   const type = types.find((t) => t.key === form.type);
   const setF = (patch) => setForm((f) => ({ ...f, ...patch }));
-  const logo = branding.logo;
+  const barLogo = logoFor(branding, colorsOf(branding).barBg);
 
   const startSignIn = () => {
     const def = types.find((t) => t.key === data.kiosk.default_type) ? data.kiosk.default_type : types[0]?.key;
@@ -203,7 +204,7 @@ export default function Kiosk() {
 
   const header = (right) => (
     <div className="k-bar">
-      <img className="k-logo" src={logo || '/logo.svg'} alt={branding.companyName} />
+      <img className="k-logo" src={barLogo} alt={branding.companyName} />
       <div className="a-row">
         {(!online || outboxCount > 0) && (
           <span className="k-chip k-offline"><IconWifiOff /> {outboxCount > 0 ? `Offline · ${outboxCount} waiting to send` : 'Offline'}</span>
@@ -305,7 +306,7 @@ function Home({ branding, onSignIn, onSignOut, onStaff, online, outboxCount }) {
   return (
     <>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16 }}>
-        <img className="k-home-logo" src={branding.logo || '/logo-white.svg'} alt={branding.companyName} />
+        <img className="k-home-logo" src={logoFor(branding, isDark(colorsOf(branding).homeText) ? '#FFFFFF' : '#000000')} alt={branding.companyName} />
         <div className="a-row">
           {(!online || outboxCount > 0) && <span className="k-chip k-offline"><IconWifiOff /> Offline</span>}
           <span className="k-chip"><IconPin /> {branding.locationName}</span>
@@ -502,7 +503,7 @@ function Done({ result, branding, onDone }) {
           ? <p>We’re letting <strong>{result.hostName}</strong> know you’re here. Please take a seat at {branding.locationName}.</p>
           : <p>Please let reception know you’ve arrived.</p>}
         {result?.queued && <p className="k-privacy">This tablet is offline right now. Your sign-in is saved and will be sent as soon as it reconnects.</p>}
-        <p style={{ fontSize: 15, color: 'var(--muted)' }}>Remember to sign out on this tablet when you leave.</p>
+        <p style={{ fontSize: 15, color: 'var(--card-muted)' }}>Remember to sign out on this tablet when you leave.</p>
         <button type="button" className="k-btn primary" style={{ alignSelf: 'flex-start' }} onClick={onDone}>Done</button>
       </div>
     </div>
@@ -547,7 +548,7 @@ function SignOutScreen({ kfetch, onDone }) {
               <span className="k-avatar">{initials(r.name)}</span>
               <span className="grow">
                 <span style={{ display: 'block', fontSize: 18, fontWeight: 700 }}>{r.name}</span>
-                <span style={{ display: 'block', fontSize: 14, color: 'var(--muted)' }}>
+                <span style={{ display: 'block', fontSize: 14, color: 'var(--card-muted)' }}>
                   {[r.company, r.host ? `visiting ${r.host}` : r.type, `in since ${fmtTime(r.signedInAt)}`].filter(Boolean).join(' · ')}
                 </span>
               </span>
