@@ -101,6 +101,30 @@ ${kind === 'host' ? `<p style="margin:18px 0 0;font-size:15px;color:#374151">Ple
   return { subject, html, text };
 }
 
+export function rollCallEmail({ branding, rc, url }) {
+  const total = rc.entries.length;
+  const subject = `EMERGENCY ROLL CALL started at ${formatTime(rc.startedAt)} (${total} on site)`;
+  const html = `<!doctype html><html><body style="margin:0;padding:24px;background:#F3F4F6;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#111827">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;margin:0 auto;background:#ffffff;border-radius:10px;overflow:hidden">
+<tr><td style="background:#B91C1C;padding:16px 24px;color:#ffffff;font-size:15px;font-weight:800;letter-spacing:1px">EVACUATION · ROLL CALL STARTED</td></tr>
+<tr><td style="padding:24px">
+<p style="margin:0 0 14px;font-size:16px;line-height:1.5">${esc(rc.startedBy)} started a roll call at ${esc(formatTime(rc.startedAt))}. <strong>${total}</strong> ${total === 1 ? 'person was' : 'people were'} on site.</p>
+<p style="margin:0 0 18px"><a href="${esc(url)}" style="display:inline-block;background:#B91C1C;color:#ffffff;padding:12px 20px;border-radius:8px;font-weight:700;text-decoration:none">Open the roll call</a></p>
+<p style="margin:0 0 8px;font-size:14px;font-weight:700">On site when it started</p>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="font-size:14px;border:1px solid #E5E7EB;border-radius:8px">
+${rc.entries.map((e) => `<tr><td style="padding:7px 12px;border-bottom:1px solid #F3F4F6"><strong>${esc(e.name)}</strong><br><span style="color:#4B5563">${esc(e.detail || '')}</span></td><td style="padding:7px 12px;border-bottom:1px solid #F3F4F6;white-space:nowrap">${esc(e.mobile || '')}</td></tr>`).join('') || '<tr><td style="padding:10px 12px;color:#4B5563">Nobody was signed in.</td></tr>'}
+</table>
+<p style="margin:18px 0 0;font-size:12px;color:#6B7280">This list is a copy in case phones or Wi-Fi are down. Sent by ${esc(branding.appName)}.</p>
+</td></tr></table></body></html>`;
+  const text = [
+    `EMERGENCY ROLL CALL started by ${rc.startedBy} at ${formatTime(rc.startedAt)}. ${total} on site.`,
+    `Open: ${url}`,
+    '',
+    ...rc.entries.map((e) => `- ${e.name} (${e.detail || ''}) ${e.mobile || ''}`),
+  ].join('\n');
+  return { subject, html, text };
+}
+
 export function testEmail(branding) {
   return {
     subject: `Test email from ${branding.appName}`,

@@ -1,0 +1,17 @@
+{
+  "id": "/rollcall",
+  "name": "Emergency Roll Call",
+  "short_name": "Roll call",
+  "description": "Fire warden roll call. Works without Wi-Fi.",
+  "start_url": "/rollcall",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#F5F6F8",
+  "theme_color": "#B91C1C",
+  "icons": [
+    { "src": "/icons/rollcall-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icons/rollcall-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/icons/rollcall-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

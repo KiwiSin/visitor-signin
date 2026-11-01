@@ -8,7 +8,11 @@ const typeBadge = (key) => ({ visitor: 'blue', contractor: 'warn', interview: 'p
 export default function Dashboard() {
   const [d, setD] = useState(null);
   const [flash, setFlash] = useFlash();
-  const load = useCallback(() => api('/api/admin/dashboard').then(setD).catch((e) => setFlash(e.message, 'bad')), [setFlash]);
+  const [rc, setRc] = useState(null);
+  const load = useCallback(() => {
+    api('/api/rollcall/state').then((s) => setRc(s.active)).catch(() => {});
+    return api('/api/admin/dashboard').then(setD).catch((e) => setFlash(e.message, 'bad'));
+  }, [setFlash]);
   useEffect(() => {
     load();
     const t = setInterval(load, 30_000);
@@ -42,6 +46,11 @@ export default function Dashboard() {
         </div>
       </div>
       {flash}
+      {rc && (
+        <a href="/rollcall" target="_blank" rel="noreferrer" className="a-msg bad" style={{ display: 'block', textDecoration: 'none' }}>
+          Roll call in progress: {rc.entries.filter((e) => e.status === 'safe').length} of {rc.entries.length} marked safe. Started {fmtTime(rc.startedAt)} by {rc.startedBy}. Open it ↗
+        </a>
+      )}
       {!d ? <p>Loading…</p> : (
         <>
           {d.failedEmails.length > 0 && (

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api, ApiError, fmtTime, initials } from '../api.js';
 import { IconCheck, IconPin, IconSearch, IconSignIn, IconSignOut, IconStaff, IconWarn, IconWifiOff } from '../icons.jsx';
 import SignaturePad from './SignaturePad.jsx';
+import RollCall from '../rollcall/RollCall.jsx';
 
 const TOKEN_KEY = 'vs_kiosk_token';
 const CACHE_KEY = 'vs_kiosk_cache';
@@ -40,6 +41,7 @@ export default function Kiosk() {
   const [wpIndex, setWpIndex] = useState(0);
 
   const kfetch = useCallback((path, opts = {}) => api(path, { ...opts, headers: { 'X-Kiosk-Token': token || '' } }), [token]);
+  const kioskHeaders = useMemo(() => ({ 'X-Kiosk-Token': token || '' }), [token]);
 
   const unpair = () => {
     localStorage.removeItem(TOKEN_KEY);
@@ -111,7 +113,7 @@ export default function Kiosk() {
     setResult(null);
   }, []);
   useEffect(() => {
-    if (screen === 'home') return undefined;
+    if (screen === 'home' || screen === 'rollcall') return undefined; // never time out a roll call
     const ms = screen === 'done' ? DONE_MS : IDLE_MS;
     const reset = () => {
       clearTimeout(idleTimer.current);
@@ -140,6 +142,9 @@ export default function Kiosk() {
         <div className="k-content"><Pair onPaired={(t) => { localStorage.setItem(TOKEN_KEY, t); setToken(t); }} /></div>
       </div>
     );
+  }
+  if (screen === 'rollcall') {
+    return <div className="k-root"><RollCall headers={kioskHeaders} storageKey="vs_rc_kiosk" onExit={goHome} /></div>;
   }
   if (!data) {
     return (
@@ -243,7 +248,7 @@ export default function Kiosk() {
   } else if (screen === 'signout') {
     body = (<>{header(null)}<SignOutScreen kfetch={kfetch} onDone={goHome} /></>);
   } else if (screen === 'staff') {
-    body = (<>{header(null)}<StaffScreen kfetch={kfetch} onDone={goHome} /></>);
+    body = (<>{header(null)}<StaffScreen kfetch={kfetch} onDone={goHome} onRollCall={() => setScreen('rollcall')} /></>);
   }
 
   return (
@@ -559,7 +564,7 @@ function SignOutScreen({ kfetch, onDone }) {
 }
 
 /* --------------------------------------------------------------- Staff */
-function StaffScreen({ kfetch, onDone }) {
+function StaffScreen({ kfetch, onDone, onRollCall }) {
   const [rows, setRows] = useState(null);
   const [q, setQ] = useState('');
   const [error, setError] = useState('');
@@ -607,7 +612,10 @@ function StaffScreen({ kfetch, onDone }) {
           ))}
         </div>
       </div>
-      <div className="k-foot"><button type="button" className="k-btn" onClick={onDone}>Back to home</button></div>
+      <div className="k-foot">
+        <button type="button" className="k-btn" onClick={onDone}>Back to home</button>
+        <button type="button" className="k-btn" style={{ background: '#B91C1C', borderColor: '#B91C1C', color: '#fff' }} onClick={onRollCall}><IconWarn /> Emergency roll call</button>
+      </div>
     </>
   );
 }

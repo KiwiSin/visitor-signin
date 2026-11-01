@@ -9,6 +9,7 @@ import { migrate, pool, waitForDb } from './db.js';
 import adminRoutes from './routes/admin.js';
 import authRoutes, { prepareSetup } from './routes/auth.js';
 import kioskRoutes from './routes/kiosk.js';
+import rollCallRoutes from './routes/rollcall.js';
 import { startWorker } from './worker.js';
 
 export async function buildApp({ logger = true } = {}) {
@@ -38,6 +39,7 @@ export async function buildApp({ logger = true } = {}) {
   await app.register(authRoutes);
   await app.register(kioskRoutes);
   await app.register(adminRoutes);
+  await app.register(rollCallRoutes);
 
   // Uploaded logos and wallpapers (signatures live in a private folder and are never served here).
   const publicUploads = path.join(config.uploadDir, 'public');

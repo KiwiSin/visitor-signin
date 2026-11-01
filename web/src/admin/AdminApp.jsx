@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import { NavLink, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { api } from '../api.js';
-import { IconCog, IconHome, IconList, IconStaff, IconTablet } from '../icons.jsx';
+import { IconCog, IconHome, IconList, IconStaff, IconTablet, IconWarn } from '../icons.jsx';
 import Dashboard from './Dashboard.jsx';
+import RollCalls from './RollCalls.jsx';
 import Settings from './Settings.jsx';
 import Staff from './Staff.jsx';
 import Tablets from './Tablets.jsx';
@@ -34,6 +35,7 @@ export default function AdminApp() {
         <Route path="visits" element={<Visits />} />
         <Route path="staff" element={<Staff />} />
         <Route path="tablets" element={<Tablets />} />
+        <Route path="rollcalls" element={<RollCalls />} />
         <Route path="settings/*" element={<Settings onBrandingChange={load} user={status.user} />} />
         <Route path="*" element={<Navigate to="/admin" replace />} />
       </Routes>
@@ -56,8 +58,10 @@ function Shell({ user, branding, onLogout, children }) {
         <NavLink to="/admin/visits"><IconList /> Visitor log</NavLink>
         <NavLink to="/admin/staff"><IconStaff /> Staff &amp; teams</NavLink>
         <NavLink to="/admin/tablets"><IconTablet /> Tablets</NavLink>
+        <NavLink to="/admin/rollcalls"><IconWarn /> Roll calls</NavLink>
         <NavLink to="/admin/settings"><IconCog /> Settings</NavLink>
         <div className="spacer" />
+        <a href="/rollcall" target="_blank" rel="noreferrer" style={{ background: '#B91C1C', color: '#fff', fontWeight: 700 }}>Emergency roll call ↗</a>
         <a href="/kiosk" target="_blank" rel="noreferrer">Open kiosk screen ↗</a>
         <div className="who">Signed in as {user.name}</div>
         <button type="button" className="link" onClick={logout}>Sign out</button>

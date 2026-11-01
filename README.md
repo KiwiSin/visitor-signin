@@ -10,6 +10,7 @@ Self-hosted visitor sign-in for reception. Visitors sign in on an iPad, agree to
 - **Sign-in flow:** visit type (Visitor, Contractor, Courier, Interview), details, choose a host, Health & Safety rules, safety questions, finger signature.
 - **Alerts:** email to the host (or their team's shared mailbox), a copy to the reception mailbox, and a separate alert to your Health & Safety contact when a safety answer is flagged. Failed emails retry for 24 hours.
 - **Admin portal:** dashboard of who's on site, visitor log with CSV export and signatures, staff and teams (manual or CSV import), tablet pairing, branding, email settings, H&S text and questions, visit types, admin users.
+- **Emergency roll call:** wardens open a personal link on their phone (added to the home screen). Start a roll call from a phone, the reception iPad or Admin; everyone signed in appears, wardens tick people safe, call missing people with one tap, and add anyone not on the list. Several wardens can tick at once. It keeps working with no Wi-Fi and syncs when back online. Wardens and reception are emailed the list when it starts. Reports are kept 7 years with CSV export.
 - **Works offline:** if the network drops, the iPad keeps signing people in and sends them when it reconnects.
 - **Privacy:** visit records and signatures are deleted automatically after 12 months (configurable).
 - **Backups:** nightly database and uploads backup, kept 30 days.
@@ -42,6 +43,7 @@ Then in Admin:
 3. **Settings › Branding:** logo, colour, wallpapers, assembly point.
 4. **Settings › Health & Safety:** paste your rules and safety questions.
 5. **Tablets:** add each iPad and pair it (steps below).
+6. **Staff & teams › fire wardens › Send roll call link:** each warden opens it on their phone and adds it to the home screen. Run a drill from Admin › Roll calls.
 
 Full guide: [docs/install.md](docs/install.md). IT checklist for the mail relay: [docs/email-relay.md](docs/email-relay.md).
 
@@ -85,7 +87,7 @@ Stack: Node.js 22 (Fastify), PostgreSQL, React (Vite), Nodemailer.
 ## Roadmap
 
 - Pre-registration with QR invites
-- Emergency roll call app for wardens (offline)
+- Option to include all staff in roll calls (not only those marked in)
 - Contractor inductions with 12-month expiry
 - Microsoft Teams Workflow, Slack and webhook alerts
 - Microsoft 365, Google Workspace and Active Directory staff sync

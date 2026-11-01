@@ -2,12 +2,25 @@
 // - Pages: network first, fall back to the cached copy.
 // - Built assets, icons, wallpapers, uploaded logos: cache first.
 // - API calls are never cached here (the kiosk keeps its own copy of the data).
-const CACHE = 'vs-shell-v1';
-const SHELL = ['/', '/kiosk', '/manifest.webmanifest', '/logo-white.svg', '/logo.svg', '/icons/icon.svg',
+const CACHE = 'vs-shell-v2';
+const SHELL = ['/', '/kiosk', '/rollcall', '/manifest-rollcall.webmanifest', '/icons/rollcall-192.png', '/manifest.webmanifest', '/logo-white.svg', '/logo.svg', '/icons/icon.svg',
   '/wallpapers/mountains.jpg', '/wallpapers/coast.jpg', '/wallpapers/bush.jpg'];
 
+// Cache the page plus every script, stylesheet and font it uses, so the app opens with no connection.
+async function precache() {
+  const cache = await caches.open(CACHE);
+  await cache.addAll(SHELL);
+  const html = await (await fetch('/kiosk', { cache: 'no-store' })).text();
+  const assets = new Set([...html.matchAll(/(?:src|href)="(\/assets\/[^"]+)"/g)].map((m) => m[1]));
+  for (const css of [...assets].filter((a) => a.endsWith('.css'))) {
+    const text = await (await fetch(css)).text();
+    for (const m of text.matchAll(/url\((\/assets\/[^)]+\.woff2)\)/g)) assets.add(m[1]);
+  }
+  await cache.addAll([...assets]);
+}
+
 self.addEventListener('install', (event) => {
-  event.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));
+  event.waitUntil(precache().then(() => self.skipWaiting()));
 });
 
 self.addEventListener('activate', (event) => {
@@ -29,10 +42,17 @@ self.addEventListener('fetch', (event) => {
       fetch(req)
         .then((res) => {
           const copy = res.clone();
-          caches.open(CACHE).then((c) => c.put('/kiosk', copy));
+          caches.open(CACHE).then((c) => c.put(url.pathname, copy));
           return res;
         })
-        .catch(() => caches.match(req).then((r) => r || caches.match('/kiosk'))),
+        // Offline: the cached copy of this page, or any copy of the app (it is one page that routes itself).
+        .catch(async () => {
+          for (const path of [url.pathname, '/rollcall', '/kiosk', '/']) {
+            const hit = await caches.match(path);
+            if (hit) return hit;
+          }
+          return Response.error();
+        }),
     );
     return;
   }

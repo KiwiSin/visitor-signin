@@ -9,6 +9,7 @@ import '@fontsource/plus-jakarta-sans/800.css';
 import './styles.css';
 import Kiosk from './kiosk/Kiosk.jsx';
 import AdminApp from './admin/AdminApp.jsx';
+import RollCallPage from './rollcall/RollCallPage.jsx';
 
 if ('serviceWorker' in navigator && window.isSecureContext) {
   window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(() => {}));
@@ -19,6 +20,7 @@ createRoot(document.getElementById('root')).render(
     <Routes>
       <Route path="/kiosk/*" element={<Kiosk />} />
       <Route path="/admin/*" element={<AdminApp />} />
+      <Route path="/rollcall" element={<RollCallPage />} />
       <Route path="*" element={<Navigate to="/admin" replace />} />
     </Routes>
   </BrowserRouter>,

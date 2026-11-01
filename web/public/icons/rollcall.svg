@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Roll call">
+  <rect width="512" height="512" fill="#B91C1C"/>
+  <g fill="none" stroke="#fff" stroke-width="30" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="148" y="112" width="216" height="296" rx="28"/>
+    <path d="M208 112v-14a14 14 0 0 1 14-14h68a14 14 0 0 1 14 14v14"/>
+    <path d="M196 206l22 22 40-42"/>
+    <path d="M196 300l22 22 40-42"/>
+    <path d="M286 214h40M286 308h40"/>
+  </g>
+</svg>

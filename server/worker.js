@@ -59,6 +59,11 @@ export async function applyRetention(log) {
   }
   await query(`DELETE FROM visitors v WHERE NOT EXISTS (SELECT 1 FROM visits WHERE visitor_id = v.id)`);
   await query(`DELETE FROM sessions WHERE expires_at < now()`);
+  // Roll call reports are kept for 7 years (H&S records), then deleted.
+  await query(`DELETE FROM roll_calls WHERE started_at < now() - interval '7 years'`);
+  // A roll call nobody ended within 12 hours is closed automatically.
+  await query(`UPDATE roll_calls SET ended_at = started_at + interval '12 hours', ended_by = 'Closed automatically'
+                WHERE ended_at IS NULL AND started_at < now() - interval '12 hours'`);
   await query(`DELETE FROM notifications WHERE created_at < now() - interval '90 days'`);
   if (old.length) log.info(`Retention: removed ${old.length} visits older than ${months} months`);
 }

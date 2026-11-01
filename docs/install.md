@@ -67,7 +67,16 @@ The link only works until the first admin is created. If you lose it, restart th
 
 To move a tablet or replace an iPad, click **Re-pair** in Admin and enter the new code.
 
-## 7. Check it works
+## 7. Set up the fire wardens
+
+1. In **Staff & teams**, set each warden's role to **Fire warden**, then click **Send roll call link**. Email it, or copy it and send it another way.
+2. The warden opens the link **on their phone** and adds it to the home screen (iPhone: Share › Add to Home Screen; Android: ⋮ › Add to Home screen). It opens as "Roll call".
+3. The phone keeps a copy of who is on site each time the app is opened. In an evacuation, wardens open it as they leave the building; it then works at the assembly point with no Wi-Fi.
+4. Run a drill: start a roll call from a phone, tick people safe, end it, and check the report in **Admin › Roll calls**.
+
+Who appears in a roll call: visitors and contractors signed in, and staff marked **In** on the tablet. Anyone else can be added by name on the spot. A roll call can also be started from the reception iPad (**Staff in / out › Emergency roll call**). If a warden's phone is lost, open their link settings and click **Turn off link**.
+
+## 8. Check it works
 
 1. Sign yourself in on the iPad, choosing a colleague as host.
 2. Check they got the email, and that the dashboard shows you on site.
@@ -81,5 +90,6 @@ To move a tablet or replace an iPad, click **Re-pair** in Admin and enter the ne
 | Emails not arriving | Settings › Email & alerts › *Recent emails* shows the error. Common causes: the relay doesn't allow the Docker host's IP; wrong port; the server needs STARTTLS. |
 | "Relay access denied" | Ask IT to allow the Docker host's IP on the receive connector (see `email-relay.md`). |
 | iPad shows "Offline" | Check its Wi-Fi and that it can open the address in Safari. Sign-ins are kept and sent when it reconnects. |
+| Warden's roll call says "Open from your warden link" | The link was turned off or replaced. Send a new one from Staff & teams. |
 | iPad asks for a code again | It was re-paired or removed in Admin. Make a new code in Admin › Tablets. |
 | Forgot the admin password | Another admin can add you again. If nobody can sign in, run `docker exec -it <db-container> psql -U visitor -c "delete from admin_users"`, restart the app and use the new setup link. |

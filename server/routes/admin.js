@@ -85,6 +85,7 @@ export default async function adminRoutes(app) {
         { label: 'H&S agreed', value: (r) => (r.agreed_hs ? `Yes (v${r.hs_version})` : 'Not required') },
         { label: 'Flagged', value: (r) => (r.flagged ? 'Yes' : '') },
         { label: 'Tablet', value: (r) => r.kiosk },
+        { label: 'Signed out by', value: (r) => r.signed_out_by },
       ]);
       reply.header('Content-Type', 'text/csv; charset=utf-8');
       reply.header('Content-Disposition', `attachment; filename="visits-${new Date().toISOString().slice(0, 10)}.csv"`);
@@ -140,7 +141,8 @@ export default async function adminRoutes(app) {
     });
 
     a.get('/api/admin/staff', async () => many(
-      `SELECT s.id, s.name, s.email, s.mobile, s.team_id, t.name AS team, s.role, s.show_on_kiosk, s.presence, s.presence_at, s.source
+      `SELECT s.id, s.name, s.email, s.mobile, s.team_id, t.name AS team, s.role, s.show_on_kiosk, s.presence, s.presence_at, s.source,
+              s.rollcall_key_hash IS NOT NULL AS has_rollcall_link, s.rollcall_key_created_at
          FROM staff s LEFT JOIN teams t ON t.id = s.team_id WHERE s.active ORDER BY s.name`,
     ));
 
@@ -199,7 +201,7 @@ export default async function adminRoutes(app) {
 
     a.delete('/api/admin/staff/:id', async (request) => {
       // Keep the row (past visits still show the host) but hide it everywhere.
-      await query(`UPDATE staff SET active=false, email=NULL, show_on_kiosk=false, updated_at=now() WHERE id=$1`, [Number(request.params.id)]);
+      await query(`UPDATE staff SET active=false, email=NULL, show_on_kiosk=false, rollcall_key_hash=NULL, updated_at=now() WHERE id=$1`, [Number(request.params.id)]);
       await audit(request.user.id, 'staff.remove', { id: Number(request.params.id) });
       return { ok: true };
     });

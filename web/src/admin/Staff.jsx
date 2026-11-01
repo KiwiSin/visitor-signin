@@ -11,6 +11,7 @@ export default function Staff() {
   const [q, setQ] = useState('');
   const [edit, setEdit] = useState(null);
   const [teamEdit, setTeamEdit] = useState(null);
+  const [linkFor, setLinkFor] = useState(null);
   const [flash, setFlash] = useFlash();
   const fileRef = useRef(null);
 
@@ -130,7 +131,8 @@ export default function Staff() {
                   <tr key={s.id}>
                     <td><strong>{s.name}</strong><div className="muted">{s.email || 'No email: alerts go to their team or reception'}</div></td>
                     <td>{s.team || <span className="muted">—</span>}</td>
-                    <td>{s.role === 'warden' ? <span className="badge warn">Fire warden</span> : 'Staff'}</td>
+                    <td>{s.role === 'warden' ? <span className="badge warn">Fire warden</span> : 'Staff'}
+                      {s.role === 'warden' && <div style={{ marginTop: 6 }}><button type="button" className="a-btn sm" onClick={() => setLinkFor({ ...s })}>{s.has_rollcall_link ? 'Roll call link ✓' : 'Send roll call link'}</button></div>}</td>
                     <td>{s.presence === 'in' ? <span className="badge ok">In</span> : <span className="badge">Out</span>}</td>
                     <td><Toggle on={s.show_on_kiosk} label={`Show ${s.name} on tablet`} onChange={(on) => setKiosk(s, on)} /></td>
                     <td className="r"><button type="button" className="a-btn sm" onClick={() => setEdit({ id: s.id, name: s.name, email: s.email || '', mobile: s.mobile || '', teamId: s.team_id || '', role: s.role, showOnKiosk: s.show_on_kiosk })}>Edit</button></td>
@@ -172,6 +174,7 @@ export default function Staff() {
           </form>
         </Modal>
       )}
+      {linkFor && <RollCallLink staff={linkFor} onClose={() => { setLinkFor(null); load(); }} />}
       {teamEdit && (
         <Modal title={teamEdit.id ? `Edit ${teamEdit.name}` : 'Add team'} onClose={() => setTeamEdit(null)}>
           <form onSubmit={saveTeam} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -186,5 +189,47 @@ export default function Staff() {
         </Modal>
       )}
     </>
+  );
+}
+
+function RollCallLink({ staff, onClose }) {
+  const [url, setUrl] = useState('');
+  const [msg, setMsg] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const make = async (email) => {
+    if (staff.has_rollcall_link && !url && !window.confirm(`Make a new link for ${staff.name}? Their current link will stop working.`)) return;
+    setBusy(true);
+    setMsg(null);
+    try {
+      const r = await api(`/api/admin/staff/${staff.id}/rollcall-link`, { method: 'POST', body: { email } });
+      setUrl(r.url);
+      setMsg(r.emailed ? { kind: 'ok', text: `Emailed to ${staff.email}.` } : { kind: 'ok', text: 'Link made. Copy it and send it to them.' });
+    } catch (e) {
+      setMsg({ kind: 'bad', text: e.message });
+    } finally {
+      setBusy(false);
+    }
+  };
+  const revoke = async () => {
+    if (!window.confirm(`Turn off ${staff.name}'s roll call link?`)) return;
+    await api(`/api/admin/staff/${staff.id}/rollcall-link`, { method: 'DELETE' });
+    onClose();
+  };
+  const copy = async () => {
+    try { await navigator.clipboard.writeText(url); setMsg({ kind: 'ok', text: 'Copied.' }); } catch { setMsg({ kind: 'warn', text: 'Select the link and copy it.' }); }
+  };
+  return (
+    <Modal title={`Roll call link for ${staff.name}`} onClose={onClose}>
+      <p className="sub">A personal link that opens the emergency roll call on their phone. They add it to their home screen; it then works without Wi-Fi. {staff.has_rollcall_link && !url ? 'They already have a link. Making a new one turns the old one off.' : ''}</p>
+      {url && <input className="a-input" readOnly value={url} onFocus={(e) => e.target.select()} aria-label="Roll call link" />}
+      {msg && <div className={`a-msg ${msg.kind}`}>{msg.text}</div>}
+      <div className="a-row">
+        {staff.email && <button type="button" className="a-btn primary" disabled={busy} onClick={() => make(true)}>Email link to {staff.email}</button>}
+        {!url && <button type="button" className="a-btn" disabled={busy} onClick={() => make(false)}>Make link to copy</button>}
+        {url && <button type="button" className="a-btn" onClick={copy}>Copy link</button>}
+        {staff.has_rollcall_link && <button type="button" className="a-btn danger" onClick={revoke}>Turn off link</button>}
+      </div>
+      <div className="a-row" style={{ justifyContent: 'flex-end' }}><button type="button" className="a-btn" onClick={onClose}>Close</button></div>
+    </Modal>
   );
 }
