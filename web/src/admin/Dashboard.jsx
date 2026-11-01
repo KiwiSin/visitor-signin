@@ -63,7 +63,7 @@ export default function Dashboard() {
             <div className="a-tile"><span className="k">Visitors on site now</span><span className="v">{d.onsite.length}</span>
               <span className="s">{(() => { const c = d.onsite.filter((v) => v.type_key === 'contractor').length; return `${c} contractor${c === 1 ? '' : 's'}`; })()}</span></div>
             <div className="a-tile"><span className="k">Sign-ins today</span><span className="v">{d.today.n}</span><span className="s">since midnight</span></div>
-            <div className="a-tile"><span className="k">Staff in</span><span className="v">{d.staffIn}</span><span className="s">marked in on the tablet</span></div>
+            <div className="a-tile"><span className="k">Staff in</span><span className="v">{d.staffIn}</span><span className="s">signed in on the tablet or here</span></div>
             <div className="a-tile"><span className="k">Safety flags today</span><span className="v" style={{ color: d.today.flagged ? '#B45309' : undefined }}>{d.today.flagged}</span>
               <span className="s">answers that need a check</span></div>
           </div>
@@ -90,6 +90,8 @@ export default function Dashboard() {
             </div>
           </section>
 
+          <StaffOnSite d={d} reload={load} setFlash={setFlash} />
+
           <section className="a-card">
             <h2>Tablets</h2>
             {!d.kiosks.length ? (
@@ -110,5 +112,46 @@ export default function Dashboard() {
         </>
       )}
     </>
+  );
+}
+
+function StaffOnSite({ d, reload, setFlash }) {
+  const [all, setAll] = useState([]);
+  const [pick, setPick] = useState('');
+  useEffect(() => { api('/api/admin/staff').then(setAll).catch(() => {}); }, [d.staffIn]);
+  const set = async (id, presence, name) => {
+    try {
+      await api(`/api/admin/staff/${id}`, { method: 'PATCH', body: { presence } });
+      setFlash(`${name} signed ${presence}.`);
+      setPick('');
+      reload();
+    } catch (e) {
+      setFlash(e.message, 'bad');
+    }
+  };
+  const out = all.filter((s) => s.presence !== 'in');
+  return (
+    <section className="a-card">
+      <div className="a-row" style={{ justifyContent: 'space-between' }}>
+        <h2>Staff on site ({d.staffInList.length})</h2>
+        <form className="a-row" onSubmit={(e) => { e.preventDefault(); const s = out.find((x) => String(x.id) === pick); if (s) set(s.id, 'in', s.name); }}>
+          <select className="a-select" style={{ width: 240 }} aria-label="Team member to sign in" value={pick} onChange={(e) => setPick(e.target.value)}>
+            <option value="">Choose a team member…</option>
+            {out.map((s) => <option key={s.id} value={s.id}>{s.name}{s.team ? ` · ${s.team}` : ''}</option>)}
+          </select>
+          <button type="submit" className="a-btn primary" disabled={!pick}>Sign in</button>
+        </form>
+      </div>
+      {d.staffInList.length ? (
+        <div className="a-grid2">
+          {d.staffInList.map((s) => (
+            <div key={s.id} className="a-toggle-row">
+              <span><strong>{s.name}</strong> <span className="muted">{s.team ? `${s.team} · ` : ''}in since {fmtTime(s.presence_at)}</span></span>
+              <button type="button" className="a-btn sm" onClick={() => set(s.id, 'out', s.name)}>Sign out</button>
+            </div>
+          ))}
+        </div>
+      ) : <p className="sub">No staff are signed in. Staff sign in on the reception iPad (Staff in / out), or sign someone in here.</p>}
+    </section>
   );
 }

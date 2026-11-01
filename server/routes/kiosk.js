@@ -72,7 +72,7 @@ export default async function kioskRoutes(app) {
       const state = request.body?.state === 'in' ? 'in' : 'out';
       const s = await one('UPDATE staff SET presence = $2, presence_at = now() WHERE id = $1 AND active RETURNING id, presence, presence_at', [Number(request.params.id), state]);
       if (!s) return reply.code(404).send({ error: 'Staff member not found.' });
-      await query('INSERT INTO staff_presence (staff_id, state, kiosk_id) VALUES ($1, $2, $3)', [s.id, state, request.kiosk.id]);
+      await query('INSERT INTO staff_presence (staff_id, state, kiosk_id, changed_by) VALUES ($1, $2, $3, $4)', [s.id, state, request.kiosk.id, `Tablet: ${request.kiosk.name}`]);
       return s;
     });
   });

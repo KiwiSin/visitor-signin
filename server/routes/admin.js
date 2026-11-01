@@ -40,12 +40,13 @@ export default async function adminRoutes(app) {
         onSite(null),
         one(`SELECT count(*)::int AS n, count(*) FILTER (WHERE flagged)::int AS flagged FROM visits
               WHERE signed_in_at >= date_trunc('day', now())`),
-        one(`SELECT count(*)::int AS n FROM staff WHERE active AND presence = 'in'`),
+        many(`SELECT s.id, s.name, t.name AS team, s.presence_at FROM staff s LEFT JOIN teams t ON t.id = s.team_id
+               WHERE s.active AND s.presence = 'in' ORDER BY s.name`),
         many(`SELECT id, recipient, subject, last_error, created_at FROM notifications WHERE status = 'failed'
                AND created_at > now() - interval '3 days' ORDER BY id DESC LIMIT 10`),
         many(`SELECT id, name, last_seen_at, token_hash IS NOT NULL AS paired FROM kiosks ORDER BY name`),
       ]);
-      return { onsite, today, staffIn: staffIn.n, failedEmails: failed, kiosks };
+      return { onsite, today, staffIn: staffIn.length, staffInList: staffIn, failedEmails: failed, kiosks };
     });
 
     // ------------------------------------------------------------------- visits
@@ -194,9 +195,10 @@ export default async function adminRoutes(app) {
       if (b.showOnKiosk !== undefined) await query('UPDATE staff SET show_on_kiosk=$2, updated_at=now() WHERE id=$1', [Number(request.params.id), bool(b.showOnKiosk)]);
       if (b.presence === 'in' || b.presence === 'out') {
         await query('UPDATE staff SET presence=$2, presence_at=now() WHERE id=$1', [Number(request.params.id), b.presence]);
-        await query('INSERT INTO staff_presence (staff_id, state) VALUES ($1, $2)', [Number(request.params.id), b.presence]);
+        await query('INSERT INTO staff_presence (staff_id, state, changed_by) VALUES ($1, $2, $3)', [Number(request.params.id), b.presence, `Admin: ${request.user.name}`]);
+        await audit(request.user.id, `staff.${b.presence === 'in' ? 'signin' : 'signout'}`, { id: Number(request.params.id) });
       }
-      return { ok: true };
+      return one('SELECT id, presence, presence_at FROM staff WHERE id=$1', [Number(request.params.id)]);
     });
 
     a.delete('/api/admin/staff/:id', async (request) => {

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { api } from '../api.js';
+import { api, fmtTime } from '../api.js';
 import { Modal, Toggle, useFlash } from './AdminApp.jsx';
 
 const blank = { name: '', email: '', mobile: '', teamId: '', role: 'staff', showOnKiosk: true };
@@ -52,6 +52,16 @@ export default function Staff() {
     await api(`/api/admin/staff/${s.id}`, { method: 'PATCH', body: { showOnKiosk: on } }).catch((e) => setFlash(e.message, 'bad'));
   };
 
+  const setPresence = async (s, presence) => {
+    try {
+      const r = await api(`/api/admin/staff/${s.id}`, { method: 'PATCH', body: { presence } });
+      setStaff((list) => list.map((x) => (x.id === s.id ? { ...x, presence: r.presence, presence_at: r.presence_at } : x)));
+      setFlash(`${s.name} signed ${presence}.`);
+    } catch (e) {
+      setFlash(e.message, 'bad');
+    }
+  };
+
   const importCsv = async (file) => {
     if (!file) return;
     try {
@@ -85,7 +95,7 @@ export default function Staff() {
     load();
   };
 
-  const list = (staff || []).filter((s) => (team === 'all' || String(s.team_id) === String(team))
+  const list = (staff || []).filter((s) => (team === 'all' || (team === 'in' ? s.presence === 'in' : String(s.team_id) === String(team)))
     && (!q || `${s.name} ${s.email || ''} ${s.team || ''}`.toLowerCase().includes(q.toLowerCase())));
 
   return (
@@ -110,6 +120,9 @@ export default function Staff() {
             <button type="button" className={`a-btn ${team === 'all' ? 'primary' : ''}`} style={{ justifyContent: 'space-between', border: 'none' }} onClick={() => setTeam('all')}>
               <span>All staff</span><span>{staff?.length ?? ''}</span>
             </button>
+            <button type="button" className={`a-btn ${team === 'in' ? 'primary' : ''}`} style={{ justifyContent: 'space-between', border: 'none' }} onClick={() => setTeam('in')}>
+              <span>Signed in now</span><span>{staff ? staff.filter((s) => s.presence === 'in').length : ''}</span>
+            </button>
             {teams.map((t) => (
               <div key={t.id} className="a-row" style={{ gap: 4, flexWrap: 'nowrap' }}>
                 <button type="button" className={`a-btn ${String(team) === String(t.id) ? 'primary' : ''}`} style={{ flex: 1, justifyContent: 'space-between', border: 'none' }} onClick={() => setTeam(t.id)}>
@@ -133,7 +146,13 @@ export default function Staff() {
                     <td>{s.team || <span className="muted">—</span>}</td>
                     <td>{s.role === 'warden' ? <span className="badge warn">Fire warden</span> : 'Staff'}
                       {s.role === 'warden' && <div style={{ marginTop: 6 }}><button type="button" className="a-btn sm" onClick={() => setLinkFor({ ...s })}>{s.has_rollcall_link ? 'Roll call link ✓' : 'Send roll call link'}</button></div>}</td>
-                    <td>{s.presence === 'in' ? <span className="badge ok">In</span> : <span className="badge">Out</span>}</td>
+                    <td>
+                      <div className="a-row" style={{ gap: 6, flexWrap: 'nowrap' }}>
+                        {s.presence === 'in' ? <span className="badge ok">In</span> : <span className="badge">Out</span>}
+                        <button type="button" className="a-btn sm" onClick={() => setPresence(s, s.presence === 'in' ? 'out' : 'in')}>{s.presence === 'in' ? 'Sign out' : 'Sign in'}</button>
+                      </div>
+                      {s.presence === 'in' && s.presence_at && <div className="muted">since {fmtTime(s.presence_at)}</div>}
+                    </td>
                     <td><Toggle on={s.show_on_kiosk} label={`Show ${s.name} on tablet`} onChange={(on) => setKiosk(s, on)} /></td>
                     <td className="r"><button type="button" className="a-btn sm" onClick={() => setEdit({ id: s.id, name: s.name, email: s.email || '', mobile: s.mobile || '', teamId: s.team_id || '', role: s.role, showOnKiosk: s.show_on_kiosk })}>Edit</button></td>
                   </tr>
