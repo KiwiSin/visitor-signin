@@ -87,7 +87,6 @@ Stack: Node.js 22 (Fastify), PostgreSQL, React (Vite), Nodemailer.
 ## Roadmap
 
 - Pre-registration with QR invites
-- Option to include all staff in roll calls (not only those marked in)
 - Contractor inductions with 12-month expiry
 - Microsoft Teams Workflow, Slack and webhook alerts
 - Microsoft 365, Google Workspace and Active Directory staff sync
