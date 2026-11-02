@@ -5,6 +5,7 @@ import { config } from './config.js';
 
 // Return DATE / TIMESTAMP columns as strings we control, numbers as numbers.
 pg.types.setTypeParser(20, (v) => Number(v)); // int8
+pg.types.setTypeParser(1082, (v) => v);        // date -> 'YYYY-MM-DD' (no time zone shifts)
 
 export const pool = new pg.Pool({ connectionString: config.databaseUrl, max: 10 });
 

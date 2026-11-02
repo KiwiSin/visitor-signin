@@ -1,3 +1,4 @@
+import { appPath } from '../tenant.js';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api, ApiError, fmtTime } from '../api.js';
 import { IconWarn, IconWifiOff } from '../icons.jsx';
@@ -191,7 +192,7 @@ export default function RollCall({ headers = {}, storageKey = 'vs_rc', onExit })
         <div className="rc-body" style={{ justifyContent: 'center' }}>
           <img src="/logo.svg" alt="Visitor Sign-In" style={{ height: 40, alignSelf: 'flex-start' }} />
           <h1 style={{ fontSize: 24 }}>Roll call</h1>
-          <p>Open this page from your personal warden link (ask your admin to send it from Admin › Staff), or <a href="/admin">sign in to Admin</a> first.</p>
+          <p>Open this page from your personal warden link (ask your admin to send it from Admin › Staff), or <a href={appPath('/admin')}>sign in to Admin</a> first.</p>
         </div>
       </div>
     );

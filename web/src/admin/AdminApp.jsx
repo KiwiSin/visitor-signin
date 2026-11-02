@@ -4,6 +4,7 @@ import { api } from '../api.js';
 import { IconCog, IconHome, IconList, IconStaff, IconTablet, IconWarn } from '../icons.jsx';
 import Dashboard from './Dashboard.jsx';
 import { applyTheme, colorsOf, logoFor } from '../theme.js';
+import { appPath, slug } from '../tenant.js';
 import RollCalls from './RollCalls.jsx';
 import Settings from './Settings.jsx';
 import Staff from './Staff.jsx';
@@ -16,21 +17,38 @@ export default function AdminApp() {
   const location = useLocation();
 
   const load = useCallback(async () => {
-    const [s, b] = await Promise.all([api('/api/auth/status'), api('/api/public/branding')]);
+    const s = await api('/api/auth/status');
     setStatus(s);
+    const b = await api('/api/public/branding').catch(() => null);
     setBranding(b);
     applyTheme(b);
-    document.title = `${b?.appName || 'Visitor Sign-In'} · Admin`;
+    document.title = `${b?.companyName || 'Visitor Sign-In'} · Admin`;
   }, []);
   useEffect(() => { load().catch(() => setStatus({ error: true })); }, [load]);
 
   if (!status) return null;
-  if (status.error) return <div className="a-center"><div className="a-auth"><h1>Can’t reach the server</h1><p>Check that the app is running, then reload.</p></div></div>;
+  if (status.error) return <Message title="Can’t reach the server">Check that the app is running, then reload.</Message>;
   if (status.needsSetup) return <Setup onDone={load} token={new URLSearchParams(location.search).get('token')} />;
+  if (!status.business) return <Message title="Business not found">There is no business at this address. Check the link you were given.</Message>;
   if (!status.user) return <Login onDone={load} branding={branding} />;
+  if (!status.canManage) {
+    const u = status.user;
+    return (
+      <Message title="This account is for a different business">
+        You are signed in as {u.email}.{' '}
+        {u.businessSlug ? <a href={`/b/${u.businessSlug}/admin`}>Go to {u.businessName}</a> : null}
+        {u.isHost ? <> · <a href="/host">Host console</a></> : null}
+        {' · '}<button type="button" className="a-btn sm" onClick={async () => { await api('/api/auth/logout', { method: 'POST', body: {} }); load(); }}>Sign out</button>
+      </Message>
+    );
+  }
+  if (status.business.status !== 'active' && !status.user.isHost) {
+    return <Message title="This business is paused">Sign-in and admin are paused for {status.business.name}. Contact your provider.</Message>;
+  }
 
   return (
-    <Shell user={status.user} branding={branding} onLogout={load}>
+    <Shell user={status.user} business={status.business} branding={branding} onLogout={load}>
+      {status.business.status !== 'active' && <div className="a-msg warn">This business is paused: its tablets and admins can’t sign in. Resume it in the Host console.</div>}
       <Routes>
         <Route index element={<Dashboard />} />
         <Route path="visits" element={<Visits />} />
@@ -44,7 +62,11 @@ export default function AdminApp() {
   );
 }
 
-function Shell({ user, branding, onLogout, children }) {
+function Message({ title, children }) {
+  return <div className="a-center"><div className="a-auth"><img src="/logo.svg" alt="Visitor Sign-In" /><h1>{title}</h1><p>{children}</p></div></div>;
+}
+
+function Shell({ user, business, branding, onLogout, children }) {
   const navigate = useNavigate();
   const logout = async () => {
     await api('/api/auth/logout', { method: 'POST', body: {} });
@@ -54,7 +76,7 @@ function Shell({ user, branding, onLogout, children }) {
   return (
     <div className="a-shell">
       <nav className="a-nav" aria-label="Admin">
-        <div className="brand"><img src={logoFor(branding, colorsOf(branding).navBg)} alt={branding?.companyName || 'Visitor Sign-In'} /></div>
+        <div className="brand"><img src={logoFor(branding, colorsOf(branding).navBg)} alt={branding?.companyName || business.name} /></div>
         <NavLink end to="/admin"><IconHome /> Dashboard</NavLink>
         <NavLink to="/admin/visits"><IconList /> Visitor log</NavLink>
         <NavLink to="/admin/staff"><IconStaff /> Staff &amp; teams</NavLink>
@@ -62,9 +84,10 @@ function Shell({ user, branding, onLogout, children }) {
         <NavLink to="/admin/rollcalls"><IconWarn /> Roll calls</NavLink>
         <NavLink to="/admin/settings"><IconCog /> Settings</NavLink>
         <div className="spacer" />
-        <a href="/rollcall" target="_blank" rel="noreferrer" style={{ background: '#B91C1C', color: '#fff', fontWeight: 700 }}>Emergency roll call ↗</a>
-        <a href="/kiosk" target="_blank" rel="noreferrer">Open kiosk screen ↗</a>
-        <div className="who">Signed in as {user.name}</div>
+        <a href={appPath('/rollcall')} target="_blank" rel="noreferrer" style={{ background: '#B91C1C', color: '#fff', fontWeight: 700 }}>Emergency roll call ↗</a>
+        <a href={appPath('/kiosk')} target="_blank" rel="noreferrer">Open kiosk screen ↗</a>
+        {user.isHost && <a href="/host">Host console ↗</a>}
+        <div className="who">{business.name}<br />Signed in as {user.name}</div>
         <button type="button" className="link" onClick={logout}>Sign out</button>
       </nav>
       <main className="a-main">{children}</main>
@@ -72,7 +95,7 @@ function Shell({ user, branding, onLogout, children }) {
   );
 }
 
-function Login({ onDone, branding }) {
+export function Login({ onDone, branding }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -80,7 +103,13 @@ function Login({ onDone, branding }) {
     e.preventDefault();
     setError('');
     try {
-      await api('/api/auth/login', { method: 'POST', body: { email, password } });
+      const r = await api('/api/auth/login', { method: 'POST', body: { email, password } });
+      const st = await api('/api/auth/status');
+      if (!st.canManage) {
+        // Signed in at another business's address: go to your own.
+        if (r.businessSlug && r.businessSlug !== slug) { window.location.href = `/b/${r.businessSlug}/admin`; return; }
+        if (r.isHost) { window.location.href = '/host'; return; }
+      }
       await onDone();
     } catch (err) {
       setError(err.message);
@@ -108,7 +137,7 @@ function Setup({ onDone, token }) {
     setError('');
     try {
       await api('/api/auth/setup', { method: 'POST', body: { ...f, token } });
-      window.history.replaceState(null, '', '/admin');
+      window.history.replaceState(null, '', appPath('/admin'));
       await onDone();
     } catch (err) {
       setError(err.message);
@@ -120,7 +149,7 @@ function Setup({ onDone, token }) {
       <form className="a-auth" onSubmit={submit}>
         <img src="/logo.svg" alt="Visitor Sign-In" />
         <h1>Welcome. Let’s set up</h1>
-        <p className="sub" style={{ color: 'var(--muted)', fontSize: 14 }}>Create the first admin account. You can add more people later in Settings.</p>
+        <p className="sub" style={{ color: 'var(--muted)', fontSize: 14 }}>Create the Host Admin account (you run this platform) and name your company, the first business. You can add more businesses later in the Host console.</p>
         {!token && <div className="a-msg warn">Open this page using the setup link printed in the app container’s log (Portainer › Containers › app › Logs).</div>}
         <label className="a-field">Company name<input className="a-input" value={f.companyName} onChange={set('companyName')} required /></label>
         <label className="a-field">Your name<input className="a-input" autoComplete="name" value={f.name} onChange={set('name')} required /></label>

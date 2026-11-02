@@ -10,6 +10,7 @@ import adminRoutes from './routes/admin.js';
 import authRoutes, { prepareSetup } from './routes/auth.js';
 import kioskRoutes from './routes/kiosk.js';
 import rollCallRoutes from './routes/rollcall.js';
+import hostRoutes from './routes/host.js';
 import { startWorker } from './worker.js';
 
 export async function buildApp({ logger = true } = {}) {
@@ -17,6 +18,15 @@ export async function buildApp({ logger = true } = {}) {
     logger: logger ? { level: process.env.LOG_LEVEL || 'info' } : false,
     trustProxy: config.trustProxy,
     bodyLimit: 2 * 1024 * 1024, // signatures + CSV imports
+    // Pages for a business live under /b/<slug>/; their API calls go to /api/b/<slug>/…
+    // Strip the prefix here and remember the business for this request.
+    rewriteUrl(req) {
+      delete req.headers['x-vs-business']; // only ever set from the address, never by the client
+      const m = /^\/api\/b\/([a-z0-9-]{1,48})(\/.*)$/.exec(req.url);
+      if (!m) return req.url;
+      req.headers['x-vs-business'] = m[1];
+      return `/api${m[2]}`;
+    },
   });
 
   await app.register(cookie, { secret: config.secretKey });
@@ -40,6 +50,7 @@ export async function buildApp({ logger = true } = {}) {
   await app.register(kioskRoutes);
   await app.register(adminRoutes);
   await app.register(rollCallRoutes);
+  await app.register(hostRoutes);
 
   // Uploaded logos and wallpapers (signatures live in a private folder and are never served here).
   const publicUploads = path.join(config.uploadDir, 'public');

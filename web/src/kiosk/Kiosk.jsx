@@ -4,6 +4,12 @@ import { IconCheck, IconPin, IconSearch, IconSignIn, IconSignOut, IconStaff, Ico
 import SignaturePad from './SignaturePad.jsx';
 import RollCall from '../rollcall/RollCall.jsx';
 import { applyTheme, colorsOf, isDark, logoFor } from '../theme.js';
+import { apiUrl, slug } from '../tenant.js';
+
+/** Move to this tablet's business address (/b/<slug>/kiosk), so the home-screen icon opens the right business. */
+function goToBusiness(businessSlug) {
+  if (businessSlug && businessSlug !== slug) window.location.replace(`/b/${businessSlug}/kiosk`);
+}
 
 const TOKEN_KEY = 'vs_kiosk_token';
 const CACHE_KEY = 'vs_kiosk_cache';
@@ -55,6 +61,7 @@ export default function Kiosk() {
     if (!token) return;
     try {
       const d = await kfetch('/api/kiosk/bootstrap');
+      goToBusiness(d.businessSlug);
       setData(d);
       save(CACHE_KEY, d);
       setOnline(true);
@@ -92,6 +99,9 @@ export default function Kiosk() {
   }, [refresh, flushOutbox]);
 
   const branding = data?.branding;
+  useEffect(() => {
+    document.querySelector('link[rel="manifest"]')?.setAttribute('href', apiUrl('/api/public/manifest/kiosk'));
+  }, []);
   useEffect(() => {
     applyTheme(branding);
     document.title = branding?.companyName ? `Sign in · ${branding.companyName}` : 'Visitor Sign-In';
@@ -140,7 +150,7 @@ export default function Kiosk() {
   if (!token) {
     return (
       <div className="k-root">{wall}
-        <div className="k-content"><Pair onPaired={(t) => { localStorage.setItem(TOKEN_KEY, t); setToken(t); }} /></div>
+        <div className="k-content"><Pair onPaired={(t, bs) => { localStorage.setItem(TOKEN_KEY, t); setToken(t); goToBusiness(bs); }} /></div>
       </div>
     );
   }
@@ -271,7 +281,7 @@ function Pair({ onPaired }) {
     setError('');
     try {
       const r = await api('/api/kiosk/pair', { method: 'POST', body: { code } });
-      onPaired(r.token);
+      onPaired(r.token, r.businessSlug);
     } catch (err) {
       setError(err.message);
       setCode('');

@@ -1,3 +1,4 @@
+import { config } from './config.js';
 import { many, query } from './db.js';
 
 export const DEFAULT_HS_TEXT = `Emergencies: on a continuous alarm, leave by the nearest exit and go to the assembly point. Do not leave until your name has been checked off.
@@ -20,7 +21,7 @@ export const DEFAULTS = {
     welcome: 'Kia ora, welcome',
     subtitle: "Please sign in so we know you're here and can let your host know.",
     locationName: 'Main Reception',
-    assemblyPoint: 'the front car park',
+    assemblyPoint: '',                 // set in Branding; the banner is hidden while empty
     logo: null,                        // logo for DARK backgrounds (home screen over the wallpaper); null = built-in
     logoOnLight: null,                 // logo for LIGHT backgrounds (white bars, sign-in page, emails); null = built-in
     theme: 'teal',                     // the preset last chosen (colours below can be changed one by one)
@@ -60,6 +61,26 @@ export const DEFAULTS = {
     text: DEFAULT_HS_TEXT,
     version: 1,
   },
+  hours: {
+    timezone: config.timeZone,
+    days: {
+      mon: { open: true, start: '08:00', end: '17:00' },
+      tue: { open: true, start: '08:00', end: '17:00' },
+      wed: { open: true, start: '08:00', end: '17:00' },
+      thu: { open: true, start: '08:00', end: '17:00' },
+      fri: { open: true, start: '08:00', end: '17:00' },
+      sat: { open: false, start: '09:00', end: '13:00' },
+      sun: { open: false, start: '09:00', end: '13:00' },
+    },
+    autoSignOut: {
+      mode: 'time',            // off | time | closing
+      time: '23:00',           // used when mode = time
+      afterClosingMins: 60,    // used when mode = closing
+      visitors: true,
+      staff: true,
+      emailReception: false,   // daily list of who was signed out automatically
+    },
+  },
   privacy: {
     notice: 'We collect your details to keep everyone on site safe and to let your host know you have arrived. They are kept for 12 months, then deleted. Ask reception if you would like a copy or a correction.',
     retentionMonths: 12,
@@ -75,22 +96,44 @@ function merge(base, over) {
   return out;
 }
 
-export async function getSettings() {
-  const rows = await many('SELECT key, value FROM settings');
+export async function getSettings(businessId) {
+  if (!businessId) throw new Error('getSettings needs a business');
+  const rows = await many('SELECT key, value FROM settings WHERE business_id = $1', [businessId]);
   const stored = Object.fromEntries(rows.map((r) => [r.key, r.value]));
   const out = {};
   for (const key of Object.keys(DEFAULTS)) out[key] = merge(DEFAULTS[key], stored[key]);
   return out;
 }
 
-export async function getSetting(key) {
-  return (await getSettings())[key];
-}
-
-export async function saveSetting(key, value) {
+export async function saveSetting(businessId, key, value) {
   if (!(key in DEFAULTS)) throw new Error(`Unknown settings section ${key}`);
   await query(
-    `INSERT INTO settings (key, value, updated_at) VALUES ($1, $2, now())
+    `INSERT INTO settings (business_id, key, value, updated_at) VALUES ($1, $2, $3, now())
+     ON CONFLICT (business_id, key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
+    [businessId, key, JSON.stringify(value)],
+  );
+}
+
+// ---- Platform settings (Host Admin) ----
+export const PLATFORM_DEFAULTS = {
+  defaultSafetyText: DEFAULT_HS_TEXT,
+  defaultQuestions: [
+    { text: 'Are you feeling unwell or do you have cold or flu symptoms?', flag_answer: 'yes' },
+    { text: 'Have you been told where the emergency exits are?', flag_answer: 'no' },
+    { text: 'Will you wear the required PPE in operational areas?', flag_answer: 'no' },
+  ],
+};
+
+export async function getPlatformSettings() {
+  const rows = await many('SELECT key, value FROM platform_settings');
+  const stored = Object.fromEntries(rows.map((r) => [r.key, r.value]));
+  return { ...PLATFORM_DEFAULTS, ...stored };
+}
+
+export async function savePlatformSetting(key, value) {
+  if (!(key in PLATFORM_DEFAULTS)) throw new Error(`Unknown platform setting ${key}`);
+  await query(
+    `INSERT INTO platform_settings (key, value, updated_at) VALUES ($1, $2, now())
      ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
     [key, JSON.stringify(value)],
   );

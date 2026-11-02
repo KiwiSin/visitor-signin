@@ -11,6 +11,8 @@ Self-hosted visitor sign-in for reception. Visitors sign in on an iPad, agree to
 - **Alerts:** email to the host (or their team's shared mailbox), a copy to the reception mailbox, and a separate alert to your Health & Safety contact when a safety answer is flagged. Failed emails retry for 24 hours.
 - **Admin portal:** dashboard of who's on site, visitor log with CSV export and signatures, staff and teams (manual or CSV import), tablet pairing, branding, email settings, H&S text and questions, visit types, admin users.
 - **Emergency roll call:** wardens open a personal link on their phone (added to the home screen). Start a roll call from a phone, the reception iPad or Admin; everyone signed in appears, wardens tick people safe, call missing people with one tap, and add anyone not on the list. Several wardens can tick at once. It keeps working with no Wi-Fi and syncs when back online. Wardens and reception are emailed the list when it starts. Reports are kept 7 years with CSV export.
+- **Many businesses on one install:** a Host console (`/host`) to create businesses from their name, send each a one-time setup link, pause or delete them. Each business gets everything above, completely separate, at `/b/<web-address>/`. See [docs/hosting.md](docs/hosting.md).
+- **Business hours and automatic sign-out:** opening hours and time zone per business; anyone still signed in is signed out at a set time (default 11:00 pm) or after closing time, with an optional daily list to reception.
 - **Works offline:** if the network drops, the iPad keeps signing people in and sends them when it reconnects.
 - **Privacy:** visit records and signatures are deleted automatically after 12 months (configurable).
 - **Backups:** nightly database and uploads backup, kept 30 days.
@@ -33,7 +35,7 @@ You need a Docker host with Portainer, and a web address with HTTPS for the iPad
    | `SECRET_KEY` | a long random string (`openssl rand -hex 32`) |
    | `APP_URL` | `https://visitors.yourcompany.co.nz` |
 
-4. **Deploy the stack.** Open **Containers › visitor-signin-app-1 › Logs** and copy the first-time setup link. Open it to create the admin account.
+4. **Deploy the stack.** Open **Containers › visitor-signin-app-1 › Logs** and copy the first-time setup link. Open it to create your account (the Host Admin) and name your company, the first business.
 5. Point your reverse proxy at port `8080` on the Docker host (change with `APP_PORT`).
 
 Then in Admin:
@@ -45,7 +47,7 @@ Then in Admin:
 5. **Tablets:** add each iPad and pair it (steps below).
 6. **Staff & teams › fire wardens › Send roll call link:** each warden opens it on their phone and adds it to the home screen. Run a drill from Admin › Roll calls.
 
-Full guide: [docs/install.md](docs/install.md). IT checklist for the mail relay: [docs/email-relay.md](docs/email-relay.md).
+Full guide: [docs/install.md](docs/install.md). Hosting other businesses: [docs/hosting.md](docs/hosting.md). IT checklist for the mail relay: [docs/email-relay.md](docs/email-relay.md).
 
 ## Setting up an iPad
 
@@ -80,6 +82,8 @@ DATABASE_URL=postgres://user:pass@localhost:5432/visitor npm run dev:server
 npm run dev:web          # http://localhost:5173 (proxies /api to :8080)
 npm run build            # builds the web app into web/dist
 npm run smoke -- http://localhost:8080 <setup-token> <smtp-host> <smtp-port>
+node scripts/rollcall-test.mjs http://localhost:8080
+node scripts/multibusiness-test.mjs http://localhost:8080
 ```
 
 Stack: Node.js 22 (Fastify), PostgreSQL, React (Vite), Nodemailer.

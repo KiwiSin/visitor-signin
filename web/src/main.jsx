@@ -10,17 +10,22 @@ import './styles.css';
 import Kiosk from './kiosk/Kiosk.jsx';
 import AdminApp from './admin/AdminApp.jsx';
 import RollCallPage from './rollcall/RollCallPage.jsx';
+import HostApp from './host/HostApp.jsx';
+import BusinessSetup from './setup/BusinessSetup.jsx';
+import { basename, slug } from './tenant.js';
 
 if ('serviceWorker' in navigator && window.isSecureContext) {
   window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(() => {}));
 }
 
 createRoot(document.getElementById('root')).render(
-  <BrowserRouter>
+  <BrowserRouter basename={basename}>
     <Routes>
       <Route path="/kiosk/*" element={<Kiosk />} />
       <Route path="/admin/*" element={<AdminApp />} />
       <Route path="/rollcall" element={<RollCallPage />} />
+      <Route path="/setup" element={<BusinessSetup />} />
+      {!slug && <Route path="/host/*" element={<HostApp />} />}
       <Route path="*" element={<Navigate to="/admin" replace />} />
     </Routes>
   </BrowserRouter>,

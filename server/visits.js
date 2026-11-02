@@ -28,8 +28,9 @@ async function saveSignature(dataUrl) {
   return name;
 }
 
-/** Create a visit from a kiosk sign-in and queue the alert emails. */
+/** Create a visit from a kiosk sign-in and queue the alert emails. The kiosk decides the business. */
 export async function signIn(body, kiosk) {
+  const bid = kiosk.business_id;
   const name = clean(body.name, 120);
   if (!name) throw new InputError('Please enter your name.');
   const mobile = clean(body.mobile, 40);
@@ -37,19 +38,19 @@ export async function signIn(body, kiosk) {
   const email = clean(body.email, 160);
   if (email && !EMAIL_RE.test(email)) throw new InputError('That email address doesn’t look right.');
 
-  const type = await one('SELECT * FROM visitor_types WHERE key = $1 AND active', [clean(body.type, 40)]);
+  const type = await one('SELECT * FROM visitor_types WHERE business_id = $1 AND key = $2 AND active', [bid, clean(body.type, 40)]);
   if (!type) throw new InputError('Please choose a visit type.');
 
   let host = null;
   if (body.hostId) {
-    host = await one('SELECT s.*, t.email AS team_email FROM staff s LEFT JOIN teams t ON t.id = s.team_id WHERE s.id = $1 AND s.active', [Number(body.hostId)]);
+    host = await one('SELECT s.*, t.email AS team_email FROM staff s LEFT JOIN teams t ON t.id = s.team_id WHERE s.business_id = $1 AND s.id = $2 AND s.active', [bid, Number(body.hostId)]);
     if (!host) throw new InputError('Please choose who you are visiting.');
   } else if (type.require_host && !body.noHost) {
     throw new InputError('Please choose who you are visiting.');
   }
 
-  const settings = await getSettings();
-  const questions = await many('SELECT * FROM safety_questions WHERE active ORDER BY sort, id');
+  const settings = await getSettings(bid);
+  const questions = await many('SELECT * FROM safety_questions WHERE business_id = $1 AND active ORDER BY sort, id', [bid]);
   const given = new Map((Array.isArray(body.answers) ? body.answers : []).map((a) => [Number(a.questionId), a.answer]));
   const answers = [];
   if (type.require_signature) {
@@ -66,7 +67,7 @@ export async function signIn(body, kiosk) {
 
   const clientId = clean(body.clientId, 80) || null;
   if (clientId) {
-    const existing = await one('SELECT id FROM visits WHERE client_id = $1', [clientId]);
+    const existing = await one('SELECT id FROM visits WHERE client_id = $1 AND business_id = $2', [clientId, bid]);
     if (existing) return { id: existing.id, duplicate: true };
   }
 
@@ -79,20 +80,20 @@ export async function signIn(body, kiosk) {
 
   const visit = await tx(async (c) => {
     let visitor = (await c.query(
-      'SELECT id FROM visitors WHERE lower(name) = lower($1) AND coalesce(mobile, \'\') = $2 ORDER BY id DESC LIMIT 1',
-      [name, mobile],
+      'SELECT id FROM visitors WHERE business_id = $3 AND lower(name) = lower($1) AND coalesce(mobile, \'\') = $2 ORDER BY id DESC LIMIT 1',
+      [name, mobile, bid],
     )).rows[0];
     if (visitor) {
       await c.query('UPDATE visitors SET company = $2, email = coalesce(nullif($3, \'\'), email), updated_at = now() WHERE id = $1', [visitor.id, company, email]);
     } else {
-      visitor = (await c.query('INSERT INTO visitors (name, company, mobile, email) VALUES ($1,$2,$3,$4) RETURNING id', [name, company, mobile, email])).rows[0];
+      visitor = (await c.query('INSERT INTO visitors (business_id, name, company, mobile, email) VALUES ($5,$1,$2,$3,$4) RETURNING id', [name, company, mobile, email, bid])).rows[0];
     }
     const { rows } = await c.query(
       `INSERT INTO visits (client_id, site_id, visitor_id, type_id, host_staff_id, host_name, kiosk_id, signed_in_at,
-                           answers, flagged, agreed_hs, hs_version, signature_file, extra)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING id, signed_in_at`,
-      [clientId, kiosk?.site_id ?? 1, visitor.id, type.id, host?.id ?? null, host?.name ?? null, kiosk?.id ?? null, signedInAt,
-        JSON.stringify(answers), flagged, !!type.require_signature, type.require_signature ? settings.safety.version : null, signatureFile, JSON.stringify(extra)],
+                           answers, flagged, agreed_hs, hs_version, signature_file, extra, business_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) RETURNING id, signed_in_at`,
+      [clientId, kiosk?.site_id ?? null, visitor.id, type.id, host?.id ?? null, host?.name ?? null, kiosk?.id ?? null, signedInAt,
+        JSON.stringify(answers), flagged, !!type.require_signature, type.require_signature ? settings.safety.version : null, signatureFile, JSON.stringify(extra), bid],
     );
     return rows[0];
   });
@@ -101,19 +102,19 @@ export async function signIn(body, kiosk) {
     visitorName: name, company, mobile, typeName: type.name, hostName: host?.name ?? null,
     signedInAt: visit.signed_in_at, agreedHs: !!type.require_signature, answers, extra,
   };
-  await queueArrivalEmails(visit.id, summary, host, settings);
+  await queueArrivalEmails(bid, visit.id, summary, host, settings);
   return { id: visit.id, hostName: host?.name ?? null, flagged };
 }
 
-async function queueArrivalEmails(visitId, summary, host, settings) {
-  const { notify, branding, email } = settings;
+async function queueArrivalEmails(bid, visitId, summary, host, settings) {
+  const { notify, branding, email, hours } = settings;
   if (email.method === 'none') return;
   const queue = async (kind, recipient) => {
     if (!recipient || !EMAIL_RE.test(recipient)) return;
-    const msg = arrivalEmail({ branding, visit: summary, kind });
+    const msg = arrivalEmail({ branding, visit: summary, kind, tz: hours.timezone });
     await query(
-      `INSERT INTO notifications (visit_id, kind, recipient, subject, body_html, body_text) VALUES ($1,$2,$3,$4,$5,$6)`,
-      [visitId, kind, recipient, msg.subject, msg.html, msg.text],
+      `INSERT INTO notifications (business_id, visit_id, kind, recipient, subject, body_html, body_text) VALUES ($7,$1,$2,$3,$4,$5,$6)`,
+      [visitId, kind, recipient, msg.subject, msg.html, msg.text, bid],
     );
   };
   // Host's own email first; if they have none, their team's shared mailbox.
@@ -125,21 +126,22 @@ async function queueArrivalEmails(visitId, summary, host, settings) {
   if (summary.answers.some((a) => a.flagged) && notify.flaggedTo) await queue('flagged', notify.flaggedTo);
 }
 
-export async function signOut(visitId, by) {
+export async function signOut(businessId, visitId, by) {
+  if (!/^[0-9a-f-]{36}$/i.test(String(visitId))) return false;
   const v = await one(
-    `UPDATE visits SET signed_out_at = now(), signed_out_by = $2 WHERE id = $1 AND signed_out_at IS NULL RETURNING id`,
-    [visitId, by],
+    `UPDATE visits SET signed_out_at = now(), signed_out_by = $2 WHERE id = $1 AND business_id = $3 AND signed_out_at IS NULL RETURNING id`,
+    [visitId, by, businessId],
   );
   return !!v;
 }
 
-export async function onSite(siteId) {
+export async function onSite(businessId) {
   return many(
     `SELECT v.id, vi.name, vi.company, t.name AS type, t.key AS type_key, v.host_name, v.signed_in_at, v.flagged
        FROM visits v JOIN visitors vi ON vi.id = v.visitor_id JOIN visitor_types t ON t.id = v.type_id
-      WHERE v.signed_out_at IS NULL AND ($1::int IS NULL OR v.site_id = $1)
+      WHERE v.business_id = $1 AND v.signed_out_at IS NULL
         AND v.signed_in_at > now() - interval '7 days'
       ORDER BY vi.name`,
-    [siteId ?? null],
+    [businessId],
   );
 }

@@ -1,5 +1,5 @@
 import { audit, requireAdmin } from '../auth.js';
-import { config } from '../config.js';
+import { businessUrl } from '../business.js';
 import { toCsv } from '../csv.js';
 import { many, one, query } from '../db.js';
 import { sendMail } from '../mailer.js';
@@ -17,7 +17,7 @@ export default async function rollCallRoutes(app) {
       request.actor = actor;
     });
 
-    r.get('/api/rollcall/state', async (request) => ({ me: request.actor, ...(await rollCallState()) }));
+    r.get('/api/rollcall/state', async (request) => ({ me: { type: request.actor.type, name: request.actor.name }, ...(await rollCallState(request.actor.businessId)) }));
 
     r.post('/api/rollcall/sync', async (request) => syncRollCall(request.body || {}, request.actor));
   });
@@ -27,16 +27,17 @@ export default async function rollCallRoutes(app) {
     a.addHook('preHandler', requireAdmin);
 
     a.post('/api/admin/staff/:id/rollcall-link', async (request, reply) => {
-      const s = await one('SELECT id, name, email FROM staff WHERE id = $1 AND active', [Number(request.params.id)]);
+      const B = request.business.id;
+      const s = await one('SELECT id, name, email FROM staff WHERE id = $1 AND business_id = $2 AND active', [Number(request.params.id), B]);
       if (!s) return reply.code(404).send({ error: 'Staff member not found.' });
       const key = randomToken(24);
       await query(`UPDATE staff SET rollcall_key_hash = $2, rollcall_key_created_at = now(), role = 'warden' WHERE id = $1`, [s.id, sha256(key)]);
-      const url = `${config.appUrl}/rollcall#key=${key}`;
-      await audit(request.user.id, 'rollcall.link', { staff: s.id });
+      const url = `${businessUrl(request.business, '/rollcall')}#key=${key}`;
+      await audit(request.user.id, 'rollcall.link', { staff: s.id }, B);
       let emailed = false;
       if (request.body?.email) {
         if (!s.email) return reply.code(400).send({ error: `${s.name} has no email address. Copy the link instead.` });
-        const { email, branding } = await getSettings();
+        const { email, branding } = await getSettings(B);
         try {
           await sendMail(email, {
             to: s.email,
@@ -53,36 +54,39 @@ export default async function rollCallRoutes(app) {
     });
 
     a.delete('/api/admin/staff/:id/rollcall-link', async (request) => {
-      await query('UPDATE staff SET rollcall_key_hash = NULL, rollcall_key_created_at = NULL WHERE id = $1', [Number(request.params.id)]);
-      await audit(request.user.id, 'rollcall.revoke', { staff: Number(request.params.id) });
+      await query('UPDATE staff SET rollcall_key_hash = NULL, rollcall_key_created_at = NULL WHERE id = $1 AND business_id = $2', [Number(request.params.id), request.business.id]);
+      await audit(request.user.id, 'rollcall.revoke', { staff: Number(request.params.id) }, request.business.id);
       return { ok: true };
     });
 
-    a.get('/api/admin/rollcalls', async () => many(
+    a.get('/api/admin/rollcalls', async (request) => many(
       `SELECT r.id, r.started_at, r.started_by, r.ended_at, r.ended_by,
               count(e.id)::int AS total, count(e.id) FILTER (WHERE e.status = 'safe')::int AS safe
          FROM roll_calls r LEFT JOIN roll_call_entries e ON e.roll_call_id = r.id
+        WHERE r.business_id = $1
         GROUP BY r.id ORDER BY r.started_at DESC LIMIT 200`,
+      [request.business.id],
     ));
 
     a.get('/api/admin/rollcalls/:id', async (request, reply) => {
-      const v = await rollCallView(Number(request.params.id));
+      const v = await rollCallView(Number(request.params.id), request.business.id);
       if (!v) return reply.code(404).send({ error: 'Roll call not found.' });
       return v;
     });
 
     a.get('/api/admin/rollcalls/:id/csv', async (request, reply) => {
-      const v = await rollCallView(Number(request.params.id));
+      const v = await rollCallView(Number(request.params.id), request.business.id);
       if (!v) return reply.code(404).send({ error: 'Roll call not found.' });
+      const tz = (await getSettings(request.business.id)).hours.timezone;
       const csv = toCsv(v.entries, [
         { label: 'Name', value: (e) => e.name },
         { label: 'Who', value: (e) => e.detail },
         { label: 'Mobile', value: (e) => e.mobile },
         { label: 'Status', value: (e) => (e.status === 'safe' ? 'Safe' : 'NOT ACCOUNTED FOR') },
         { label: 'Marked by', value: (e) => e.markedBy },
-        { label: 'Marked at', value: (e) => (e.markedAt ? formatDateTime(e.markedAt) : '') },
+        { label: 'Marked at', value: (e) => (e.markedAt ? formatDateTime(e.markedAt, tz) : '') },
       ]);
-      const head = `Roll call ${v.id},Started ${formatDateTime(v.startedAt)} by ${v.startedBy},${v.endedAt ? `Ended ${formatDateTime(v.endedAt)} by ${v.endedBy}` : 'Not ended'}\r\n\r\n`;
+      const head = `Roll call ${v.id},Started ${formatDateTime(v.startedAt, tz)} by ${v.startedBy},${v.endedAt ? `Ended ${formatDateTime(v.endedAt, tz)} by ${v.endedBy}` : 'Not ended'}\r\n\r\n`;
       reply.header('Content-Type', 'text/csv; charset=utf-8');
       reply.header('Content-Disposition', `attachment; filename="roll-call-${v.id}.csv"`);
       return `﻿${head}${csv}`;

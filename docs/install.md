@@ -42,7 +42,7 @@ Add a proxy host for `visitors.yourcompany.co.nz` that forwards to `http://<dock
 
 1. In Portainer, open **Containers › visitor-signin-app-1 › Logs**.
 2. Copy the line that starts with `https://…/admin/setup?token=…` and open it.
-3. Enter your company name, your name, email and a password (10+ characters).
+3. Enter your company name, your name, email and a password (10+ characters). This makes you the **Host Admin** (you can add other businesses later at `/host`) and your company the first business.
 
 The link only works until the first admin is created. If you lose it, restart the app container and a new one is printed.
 

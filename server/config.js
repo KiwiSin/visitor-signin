@@ -27,4 +27,8 @@ export const config = {
   webDist: path.join(root, 'web', 'dist'),
   migrationsDir: path.join(root, 'migrations'),
   timeZone: process.env.TZ || 'Pacific/Auckland',
+  // Optional: serve each business on its own subdomain, e.g. BASE_DOMAIN=signin.example.com -> acme.signin.example.com
+  baseDomain: (process.env.BASE_DOMAIN || '').toLowerCase().replace(/^\.+|\.+$/g, ''),
+  // Optional: which business opens at the plain addresses (/admin, /kiosk). Defaults to the first one.
+  defaultBusiness: (process.env.DEFAULT_BUSINESS || '').toLowerCase(),
 };

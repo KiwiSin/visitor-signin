@@ -1,3 +1,4 @@
+import { apiUrl, appPath } from '../tenant.js';
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api, fmtTime } from '../api.js';
@@ -42,12 +43,12 @@ export default function Dashboard() {
           <p>{new Date().toLocaleDateString('en-NZ', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</p>
         </div>
         <div className="a-actions">
-          <a className="a-btn" href={`/api/admin/visits.csv?from=${today}&to=${today}`}>Export today’s CSV</a>
+          <a className="a-btn" href={apiUrl(`/api/admin/visits.csv?from=${today}&to=${today}`)}>Export today’s CSV</a>
         </div>
       </div>
       {flash}
       {rc && (
-        <a href="/rollcall" target="_blank" rel="noreferrer" className="a-msg bad" style={{ display: 'block', textDecoration: 'none' }}>
+        <a href={appPath('/rollcall')} target="_blank" rel="noreferrer" className="a-msg bad" style={{ display: 'block', textDecoration: 'none' }}>
           Roll call in progress: {rc.entries.filter((e) => e.status === 'safe').length} of {rc.entries.length} marked safe. Started {fmtTime(rc.startedAt)} by {rc.startedBy}. Open it ↗
         </a>
       )}

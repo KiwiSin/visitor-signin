@@ -19,6 +19,8 @@ services:
       SECRET_KEY: ${SECRET_KEY:?Set SECRET_KEY (any long random string)}
       TZ: ${TZ:-Pacific/Auckland}
       TRUST_PROXY: ${TRUST_PROXY:-true}
+      DEFAULT_BUSINESS: ${DEFAULT_BUSINESS:-}
+      BASE_DOMAIN: ${BASE_DOMAIN:-}
     volumes:
       - uploads:/data/uploads
     ports:

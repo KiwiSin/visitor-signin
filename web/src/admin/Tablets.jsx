@@ -7,12 +7,14 @@ export default function Tablets() {
   const [types, setTypes] = useState([]);
   const [adding, setAdding] = useState(null);
   const [code, setCode] = useState(null);
+  const [links, setLinks] = useState(null);
   const [flash, setFlash] = useFlash();
 
   const load = useCallback(async () => {
     try {
-      const [k, t] = await Promise.all([api('/api/admin/kiosks'), api('/api/admin/visitor-types')]);
+      const [k, t, l] = await Promise.all([api('/api/admin/kiosks'), api('/api/admin/visitor-types'), api('/api/admin/links')]);
       setRows(k);
+      setLinks(l);
       setTypes(t.filter((x) => x.active));
     } catch (e) {
       setFlash(e.message, 'bad');
@@ -57,7 +59,7 @@ export default function Tablets() {
     load();
   };
 
-  const url = `${window.location.origin}/kiosk`;
+  const url = links?.kiosk || '…';
   return (
     <>
       <div className="a-head">

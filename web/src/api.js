@@ -1,3 +1,5 @@
+import { apiUrl } from './tenant.js';
+
 export class ApiError extends Error {
   constructor(message, status, code) {
     super(message);
@@ -9,7 +11,7 @@ export class ApiError extends Error {
 export async function api(path, { method = 'GET', body, headers = {}, raw = false } = {}) {
   let res;
   try {
-    res = await fetch(path, {
+    res = await fetch(apiUrl(path), {
       method,
       credentials: 'same-origin',
       headers: {

@@ -1,3 +1,4 @@
+import { apiUrl, appPath } from '../tenant.js';
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api, fmtDateTime, fmtTime } from '../api.js';
@@ -26,7 +27,7 @@ export default function RollCalls() {
     <>
       <div className="a-head">
         <div><h1>Roll calls</h1><p>Every evacuation and drill, with who was marked safe, by whom and when. Kept for 7 years.</p></div>
-        <div className="a-actions"><a className="a-btn danger" href="/rollcall" target="_blank" rel="noreferrer">Open roll call ↗</a></div>
+        <div className="a-actions"><a className="a-btn danger" href={appPath('/rollcall')} target="_blank" rel="noreferrer">Open roll call ↗</a></div>
       </div>
       {flash}
       <section className="a-card">
@@ -42,7 +43,7 @@ export default function RollCalls() {
                   <td><span className={`badge ${r.safe === r.total ? 'ok' : 'warn'}`}>{r.safe} of {r.total} safe</span></td>
                   <td className="r"><div className="a-row" style={{ justifyContent: 'flex-end' }}>
                     <button type="button" className="a-btn sm" onClick={() => view(r.id)}>View</button>
-                    <a className="a-btn sm" href={`/api/admin/rollcalls/${r.id}/csv`}>CSV</a>
+                    <a className="a-btn sm" href={apiUrl(`/api/admin/rollcalls/${r.id}/csv`)}>CSV</a>
                   </div></td>
                 </tr>
               ))}
@@ -78,7 +79,7 @@ export default function RollCalls() {
             </table>
           </div>
           <div className="a-row" style={{ justifyContent: 'flex-end' }}>
-            <a className="a-btn" href={`/api/admin/rollcalls/${open.id}/csv`}>Download CSV</a>
+            <a className="a-btn" href={apiUrl(`/api/admin/rollcalls/${open.id}/csv`)}>Download CSV</a>
             <button type="button" className="a-btn primary" onClick={() => setOpen(null)}>Close</button>
           </div>
         </Modal>

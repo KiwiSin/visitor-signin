@@ -11,6 +11,7 @@ import { sendMail } from '../mailer.js';
 import { encrypt, hashPassword, pairingCode, sha256, verifyPassword } from '../security.js';
 import { DEFAULTS, getSettings, saveSetting } from '../settings.js';
 import { formatDateTime, testEmail } from '../templates.js';
+import { businessUrl } from '../business.js';
 import { onSite, signOut } from '../visits.js';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -20,6 +21,23 @@ const bool = (v) => v === true || v === 'true' || v === 1;
 
 function bad(reply, error) {
   return reply.code(400).send({ error });
+}
+
+const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
+const DAYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
+
+function validTimeZone(tz) {
+  try { new Intl.DateTimeFormat('en-NZ', { timeZone: tz }); return true; } catch { return false; }
+}
+
+/** A 6-digit pairing code no other tablet (in any business) is waiting on. */
+async function freePairingCode() {
+  for (let i = 0; i < 20; i++) {
+    const code = pairingCode();
+    const taken = await one('SELECT 1 FROM kiosks WHERE pairing_code = $1 AND pairing_expires > now()', [code]);
+    if (!taken) return code;
+  }
+  throw new Error('Could not make a pairing code. Try again.');
 }
 
 /** Settings as sent to the admin page: secrets replaced by flags. */
@@ -32,27 +50,37 @@ export default async function adminRoutes(app) {
   app.register(async (a) => {
     a.addHook('preHandler', requireAdmin);
 
-    a.get('/api/admin/me', async (request) => request.user);
+    a.get('/api/admin/me', async (request) => ({ ...request.user, business: request.business }));
+
+    // Web addresses for this business (shown on the Tablets page, in emails and setup steps).
+    a.get('/api/admin/links', async (request) => ({
+      admin: businessUrl(request.business, '/admin'),
+      kiosk: businessUrl(request.business, '/kiosk'),
+      rollcall: businessUrl(request.business, '/rollcall'),
+    }));
 
     // ---------------------------------------------------------------- dashboard
-    a.get('/api/admin/dashboard', async () => {
+    a.get('/api/admin/dashboard', async (request) => {
+      const B = request.business.id;
+      const tz = (await getSettings(B)).hours.timezone;
       const [onsite, today, staffIn, failed, kiosks] = await Promise.all([
-        onSite(null),
+        onSite(B),
         one(`SELECT count(*)::int AS n, count(*) FILTER (WHERE flagged)::int AS flagged FROM visits
-              WHERE signed_in_at >= date_trunc('day', now())`),
+              WHERE business_id = $1 AND signed_in_at >= (date_trunc('day', now() AT TIME ZONE $2) AT TIME ZONE $2)`, [B, tz]),
         many(`SELECT s.id, s.name, t.name AS team, s.presence_at FROM staff s LEFT JOIN teams t ON t.id = s.team_id
-               WHERE s.active AND s.presence = 'in' ORDER BY s.name`),
-        many(`SELECT id, recipient, subject, last_error, created_at FROM notifications WHERE status = 'failed'
-               AND created_at > now() - interval '3 days' ORDER BY id DESC LIMIT 10`),
-        many(`SELECT id, name, last_seen_at, token_hash IS NOT NULL AS paired FROM kiosks ORDER BY name`),
+               WHERE s.business_id = $1 AND s.active AND s.presence = 'in' ORDER BY s.name`, [B]),
+        many(`SELECT id, recipient, subject, last_error, created_at FROM notifications WHERE business_id = $1 AND status = 'failed'
+               AND created_at > now() - interval '3 days' ORDER BY id DESC LIMIT 10`, [B]),
+        many(`SELECT id, name, last_seen_at, token_hash IS NOT NULL AS paired FROM kiosks WHERE business_id = $1 ORDER BY name`, [B]),
       ]);
       return { onsite, today, staffIn: staffIn.length, staffInList: staffIn, failedEmails: failed, kiosks };
     });
 
     // ------------------------------------------------------------------- visits
-    const visitQuery = async (q) => {
-      const from = q.from && !Number.isNaN(Date.parse(q.from)) ? q.from : null;
-      const to = q.to && !Number.isNaN(Date.parse(q.to)) ? q.to : null;
+    const visitQuery = async (B, q) => {
+      const from = q.from && /^\d{4}-\d{2}-\d{2}$/.test(q.from) ? q.from : null;
+      const to = q.to && /^\d{4}-\d{2}-\d{2}$/.test(q.to) ? q.to : null;
+      const tz = (await getSettings(B)).hours.timezone;
       return many(
         `SELECT v.id, v.signed_in_at, v.signed_out_at, v.signed_out_by, v.flagged, v.answers, v.extra, v.host_name,
                 v.signature_file IS NOT NULL AS has_signature, v.agreed_hs, v.hs_version,
@@ -61,21 +89,23 @@ export default async function adminRoutes(app) {
            LEFT JOIN visitors vi ON vi.id = v.visitor_id
            LEFT JOIN visitor_types t ON t.id = v.type_id
            LEFT JOIN kiosks k ON k.id = v.kiosk_id
-          WHERE ($1::date IS NULL OR v.signed_in_at >= $1::date)
-            AND ($2::date IS NULL OR v.signed_in_at < $2::date + 1)
+          WHERE v.business_id = $5
+            AND ($1::date IS NULL OR v.signed_in_at >= ($1::date::timestamp AT TIME ZONE $6))
+            AND ($2::date IS NULL OR v.signed_in_at < (($2::date + 1)::timestamp AT TIME ZONE $6))
             AND ($3 = '' OR vi.name ILIKE '%' || $3 || '%' OR vi.company ILIKE '%' || $3 || '%' OR v.host_name ILIKE '%' || $3 || '%')
           ORDER BY v.signed_in_at DESC LIMIT $4`,
-        [from, to, str(q.q, 80), Math.min(Number(q.limit) || 300, 5000)],
+        [from, to, str(q.q, 80), Math.min(Number(q.limit) || 300, 5000), B, tz],
       );
     };
 
-    a.get('/api/admin/visits', async (request) => visitQuery(request.query));
+    a.get('/api/admin/visits', async (request) => visitQuery(request.business.id, request.query));
 
     a.get('/api/admin/visits.csv', async (request, reply) => {
-      const rows = await visitQuery({ ...request.query, limit: 5000 });
+      const rows = await visitQuery(request.business.id, { ...request.query, limit: 5000 });
+      const tz = (await getSettings(request.business.id)).hours.timezone;
       const csv = toCsv(rows, [
-        { label: 'Signed in', value: (r) => formatDateTime(r.signed_in_at) },
-        { label: 'Signed out', value: (r) => (r.signed_out_at ? formatDateTime(r.signed_out_at) : '') },
+        { label: 'Signed in', value: (r) => formatDateTime(r.signed_in_at, tz) },
+        { label: 'Signed out', value: (r) => (r.signed_out_at ? formatDateTime(r.signed_out_at, tz) : '') },
         { label: 'Name', value: (r) => r.name },
         { label: 'Company', value: (r) => r.company },
         { label: 'Mobile', value: (r) => r.mobile },
@@ -94,14 +124,15 @@ export default async function adminRoutes(app) {
     });
 
     a.post('/api/admin/visits/:id/signout', async (request, reply) => {
-      const ok = await signOut(request.params.id, 'admin');
+      const ok = await signOut(request.business.id, request.params.id, 'admin');
       if (!ok) return reply.code(404).send({ error: 'Already signed out.' });
-      await audit(request.user.id, 'visit.signout', { id: request.params.id });
+      await audit(request.user.id, 'visit.signout', { id: request.params.id }, request.business.id);
       return { ok: true };
     });
 
     a.get('/api/admin/visits/:id/signature', async (request, reply) => {
-      const v = await one('SELECT signature_file FROM visits WHERE id = $1', [request.params.id]);
+      if (!/^[0-9a-f-]{36}$/i.test(request.params.id)) return reply.code(404).send({ error: 'No signature.' });
+      const v = await one('SELECT signature_file FROM visits WHERE id = $1 AND business_id = $2', [request.params.id, request.business.id]);
       if (!v?.signature_file) return reply.code(404).send({ error: 'No signature.' });
       const file = path.join(config.uploadDir, 'private', path.basename(v.signature_file));
       const buf = await fs.readFile(file).catch(() => null);
@@ -111,8 +142,9 @@ export default async function adminRoutes(app) {
     });
 
     // -------------------------------------------------------------- staff/teams
-    a.get('/api/admin/teams', async () => many(
-      `SELECT t.*, (SELECT count(*)::int FROM staff s WHERE s.team_id = t.id AND s.active) AS staff_count FROM teams t ORDER BY name`,
+    a.get('/api/admin/teams', async (request) => many(
+      `SELECT t.*, (SELECT count(*)::int FROM staff s WHERE s.team_id = t.id AND s.active) AS staff_count FROM teams t WHERE t.business_id = $1 ORDER BY name`,
+      [request.business.id],
     ));
 
     a.post('/api/admin/teams', async (request, reply) => {
@@ -121,7 +153,7 @@ export default async function adminRoutes(app) {
       if (!name) return bad(reply, 'Enter a team name.');
       if (email && !EMAIL_RE.test(email)) return bad(reply, 'That email address doesn’t look right.');
       try {
-        return await one('INSERT INTO teams (name, email) VALUES ($1, nullif($2, \'\')) RETURNING *', [name, email]);
+        return await one('INSERT INTO teams (business_id, name, email) VALUES ($3, $1, nullif($2, \'\')) RETURNING *', [name, email, request.business.id]);
       } catch (e) {
         if (e.code === '23505') return bad(reply, 'A team with that name already exists.');
         throw e;
@@ -133,25 +165,26 @@ export default async function adminRoutes(app) {
       const email = str(request.body?.email, 160);
       if (!name) return bad(reply, 'Enter a team name.');
       if (email && !EMAIL_RE.test(email)) return bad(reply, 'That email address doesn’t look right.');
-      return one('UPDATE teams SET name=$2, email=nullif($3, \'\') WHERE id=$1 RETURNING *', [Number(request.params.id), name, email]);
+      return one('UPDATE teams SET name=$2, email=nullif($3, \'\') WHERE id=$1 AND business_id=$4 RETURNING *', [Number(request.params.id), name, email, request.business.id]);
     });
 
     a.delete('/api/admin/teams/:id', async (request) => {
-      await query('DELETE FROM teams WHERE id = $1', [Number(request.params.id)]);
+      await query('DELETE FROM teams WHERE id = $1 AND business_id = $2', [Number(request.params.id), request.business.id]);
       return { ok: true };
     });
 
-    a.get('/api/admin/staff', async () => many(
+    a.get('/api/admin/staff', async (request) => many(
       `SELECT s.id, s.name, s.email, s.mobile, s.team_id, t.name AS team, s.role, s.show_on_kiosk, s.presence, s.presence_at, s.source,
               s.rollcall_key_hash IS NOT NULL AS has_rollcall_link, s.rollcall_key_created_at
-         FROM staff s LEFT JOIN teams t ON t.id = s.team_id WHERE s.active ORDER BY s.name`,
+         FROM staff s LEFT JOIN teams t ON t.id = s.team_id WHERE s.business_id = $1 AND s.active ORDER BY s.name`,
+      [request.business.id],
     ));
 
     const staffInput = (b) => ({
       name: str(b.name, 120),
       email: str(b.email, 160).toLowerCase(),
       mobile: str(b.mobile, 40),
-      teamId: b.teamId ? Number(b.teamId) : null,
+      teamId: b.teamId ? Number(b.teamId) : null,   // checked against the business below
       role: b.role === 'warden' ? 'warden' : 'staff',
       showOnKiosk: b.showOnKiosk === undefined ? true : bool(b.showOnKiosk),
     });
@@ -162,10 +195,11 @@ export default async function adminRoutes(app) {
       if (s.email && !EMAIL_RE.test(s.email)) return bad(reply, 'That email address doesn’t look right.');
       try {
         const row = await one(
-          `INSERT INTO staff (name, email, mobile, team_id, role, show_on_kiosk) VALUES ($1, nullif($2,''), nullif($3,''), $4, $5, $6) RETURNING id`,
-          [s.name, s.email, s.mobile, s.teamId, s.role, s.showOnKiosk],
+          `INSERT INTO staff (business_id, name, email, mobile, team_id, role, show_on_kiosk)
+           VALUES ($7, $1, nullif($2,''), nullif($3,''), (SELECT id FROM teams WHERE id = $4 AND business_id = $7), $5, $6) RETURNING id`,
+          [s.name, s.email, s.mobile, s.teamId, s.role, s.showOnKiosk, request.business.id],
         );
-        await audit(request.user.id, 'staff.add', { id: row.id, name: s.name });
+        await audit(request.user.id, 'staff.add', { id: row.id, name: s.name }, request.business.id);
         return row;
       } catch (e) {
         if (e.code === '23505') return bad(reply, 'Someone with that email is already in the list.');
@@ -179,10 +213,11 @@ export default async function adminRoutes(app) {
       if (s.email && !EMAIL_RE.test(s.email)) return bad(reply, 'That email address doesn’t look right.');
       try {
         await query(
-          `UPDATE staff SET name=$2, email=nullif($3,''), mobile=nullif($4,''), team_id=$5, role=$6, show_on_kiosk=$7, updated_at=now() WHERE id=$1`,
-          [Number(request.params.id), s.name, s.email, s.mobile, s.teamId, s.role, s.showOnKiosk],
+          `UPDATE staff SET name=$2, email=nullif($3,''), mobile=nullif($4,''), team_id=(SELECT id FROM teams WHERE id = $5 AND business_id = $8),
+                  role=$6, show_on_kiosk=$7, updated_at=now() WHERE id=$1 AND business_id=$8`,
+          [Number(request.params.id), s.name, s.email, s.mobile, s.teamId, s.role, s.showOnKiosk, request.business.id],
         );
-        await audit(request.user.id, 'staff.edit', { id: Number(request.params.id) });
+        await audit(request.user.id, 'staff.edit', { id: Number(request.params.id) }, request.business.id);
         return { ok: true };
       } catch (e) {
         if (e.code === '23505') return bad(reply, 'Someone with that email is already in the list.');
@@ -190,21 +225,25 @@ export default async function adminRoutes(app) {
       }
     });
 
-    a.patch('/api/admin/staff/:id', async (request) => {
+    a.patch('/api/admin/staff/:id', async (request, reply) => {
       const b = request.body || {};
-      if (b.showOnKiosk !== undefined) await query('UPDATE staff SET show_on_kiosk=$2, updated_at=now() WHERE id=$1', [Number(request.params.id), bool(b.showOnKiosk)]);
+      const B = request.business.id;
+      const id = Number(request.params.id);
+      const s = await one('SELECT id FROM staff WHERE id=$1 AND business_id=$2 AND active', [id, B]);
+      if (!s) return reply.code(404).send({ error: 'Staff member not found.' });
+      if (b.showOnKiosk !== undefined) await query('UPDATE staff SET show_on_kiosk=$2, updated_at=now() WHERE id=$1', [id, bool(b.showOnKiosk)]);
       if (b.presence === 'in' || b.presence === 'out') {
-        await query('UPDATE staff SET presence=$2, presence_at=now() WHERE id=$1', [Number(request.params.id), b.presence]);
-        await query('INSERT INTO staff_presence (staff_id, state, changed_by) VALUES ($1, $2, $3)', [Number(request.params.id), b.presence, `Admin: ${request.user.name}`]);
-        await audit(request.user.id, `staff.${b.presence === 'in' ? 'signin' : 'signout'}`, { id: Number(request.params.id) });
+        await query('UPDATE staff SET presence=$2, presence_at=now() WHERE id=$1', [id, b.presence]);
+        await query('INSERT INTO staff_presence (staff_id, state, changed_by, business_id) VALUES ($1, $2, $3, $4)', [id, b.presence, `Admin: ${request.user.name}`, B]);
+        await audit(request.user.id, `staff.${b.presence === 'in' ? 'signin' : 'signout'}`, { id }, B);
       }
-      return one('SELECT id, presence, presence_at FROM staff WHERE id=$1', [Number(request.params.id)]);
+      return one('SELECT id, presence, presence_at FROM staff WHERE id=$1', [id]);
     });
 
     a.delete('/api/admin/staff/:id', async (request) => {
       // Keep the row (past visits still show the host) but hide it everywhere.
-      await query(`UPDATE staff SET active=false, email=NULL, show_on_kiosk=false, rollcall_key_hash=NULL, updated_at=now() WHERE id=$1`, [Number(request.params.id)]);
-      await audit(request.user.id, 'staff.remove', { id: Number(request.params.id) });
+      await query(`UPDATE staff SET active=false, email=NULL, show_on_kiosk=false, rollcall_key_hash=NULL, updated_at=now() WHERE id=$1 AND business_id=$2`, [Number(request.params.id), request.business.id]);
+      await audit(request.user.id, 'staff.remove', { id: Number(request.params.id) }, request.business.id);
       return { ok: true };
     });
 
@@ -213,6 +252,7 @@ export default async function adminRoutes(app) {
       if (!rows.length) return bad(reply, 'The file is empty. The first row must be headings: name, email, team, mobile.');
       if (!('name' in rows[0])) return bad(reply, 'Couldn’t find a "name" column. The first row must be headings: name, email, team, mobile.');
       const result = { added: 0, updated: 0, skipped: [] };
+      const B = request.business.id;
       await tx(async (c) => {
         const teamIds = new Map();
         for (const [i, r] of rows.entries()) {
@@ -225,7 +265,7 @@ export default async function adminRoutes(app) {
           if (teamName) {
             if (!teamIds.has(teamName.toLowerCase())) {
               const t = (await c.query(
-                `INSERT INTO teams (name) VALUES ($1) ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name RETURNING id`, [teamName],
+                `INSERT INTO teams (business_id, name) VALUES ($2, $1) ON CONFLICT (business_id, name) DO UPDATE SET name = EXCLUDED.name RETURNING id`, [teamName, B],
               )).rows[0];
               teamIds.set(teamName.toLowerCase(), t.id);
             }
@@ -233,8 +273,8 @@ export default async function adminRoutes(app) {
           }
           const role = /warden/i.test(r.role || '') ? 'warden' : 'staff';
           const existing = email
-            ? (await c.query('SELECT id FROM staff WHERE lower(email) = $1', [email])).rows[0]
-            : (await c.query('SELECT id FROM staff WHERE lower(name) = lower($1) AND active', [name])).rows[0];
+            ? (await c.query('SELECT id FROM staff WHERE business_id = $2 AND lower(email) = $1', [email, B])).rows[0]
+            : (await c.query('SELECT id FROM staff WHERE business_id = $2 AND lower(name) = lower($1) AND active', [name, B])).rows[0];
           if (existing) {
             await c.query(
               `UPDATE staff SET name=$2, email=coalesce(nullif($3,''), email), mobile=coalesce(nullif($4,''), mobile), team_id=coalesce($5, team_id), role=$6, active=true, updated_at=now() WHERE id=$1`,
@@ -243,96 +283,103 @@ export default async function adminRoutes(app) {
             result.updated++;
           } else {
             await c.query(
-              `INSERT INTO staff (name, email, mobile, team_id, role, source) VALUES ($1, nullif($2,''), nullif($3,''), $4, $5, 'csv')`,
-              [name, email, str(r.mobile || r.phone, 40), teamId, role],
+              `INSERT INTO staff (business_id, name, email, mobile, team_id, role, source) VALUES ($6, $1, nullif($2,''), nullif($3,''), $4, $5, 'csv')`,
+              [name, email, str(r.mobile || r.phone, 40), teamId, role, B],
             );
             result.added++;
           }
         }
       });
-      await audit(request.user.id, 'staff.import', result);
+      await audit(request.user.id, 'staff.import', result, B);
       return result;
     });
 
     // ------------------------------------------------------------------ kiosks
-    a.get('/api/admin/kiosks', async () => many(
+    a.get('/api/admin/kiosks', async (request) => many(
       `SELECT id, name, default_type, pairing_code, pairing_expires, token_hash IS NOT NULL AS paired, paired_at, last_seen_at
-         FROM kiosks ORDER BY name`,
+         FROM kiosks WHERE business_id = $1 ORDER BY name`,
+      [request.business.id],
     ));
 
     a.post('/api/admin/kiosks', async (request, reply) => {
       const name = str(request.body?.name, 80);
       if (!name) return bad(reply, 'Give the tablet a name, e.g. "Tablet 1 · Main entrance".');
       const row = await one(
-        `INSERT INTO kiosks (site_id, name, default_type, pairing_code, pairing_expires) VALUES (1, $1, nullif($2,''), $3, now() + interval '30 minutes') RETURNING *`,
-        [name, str(request.body?.defaultType, 40), pairingCode()],
+        `INSERT INTO kiosks (business_id, site_id, name, default_type, pairing_code, pairing_expires)
+         VALUES ($4, (SELECT id FROM sites WHERE business_id = $4 ORDER BY id LIMIT 1), $1, nullif($2,''), $3, now() + interval '30 minutes')
+         RETURNING id, name, default_type, pairing_code, pairing_expires`,
+        [name, str(request.body?.defaultType, 40), await freePairingCode(), request.business.id],
       );
-      await audit(request.user.id, 'kiosk.add', { id: row.id, name });
+      await audit(request.user.id, 'kiosk.add', { id: row.id, name }, request.business.id);
       return row;
     });
 
     a.put('/api/admin/kiosks/:id', async (request, reply) => {
       const name = str(request.body?.name, 80);
       if (!name) return bad(reply, 'Give the tablet a name.');
-      await query(`UPDATE kiosks SET name=$2, default_type=nullif($3,'') WHERE id=$1`, [Number(request.params.id), name, str(request.body?.defaultType, 40)]);
+      await query(`UPDATE kiosks SET name=$2, default_type=nullif($3,'') WHERE id=$1 AND business_id=$4`, [Number(request.params.id), name, str(request.body?.defaultType, 40), request.business.id]);
       return { ok: true };
     });
 
     a.post('/api/admin/kiosks/:id/pair', async (request) => {
       // A new code also un-pairs whichever device held the old token.
       const row = await one(
-        `UPDATE kiosks SET pairing_code=$2, pairing_expires=now() + interval '30 minutes', token_hash=NULL, paired_at=NULL WHERE id=$1 RETURNING *`,
-        [Number(request.params.id), pairingCode()],
+        `UPDATE kiosks SET pairing_code=$2, pairing_expires=now() + interval '30 minutes', token_hash=NULL, paired_at=NULL
+          WHERE id=$1 AND business_id=$3 RETURNING id, name, default_type, pairing_code, pairing_expires`,
+        [Number(request.params.id), await freePairingCode(), request.business.id],
       );
-      await audit(request.user.id, 'kiosk.repair', { id: row?.id });
+      await audit(request.user.id, 'kiosk.repair', { id: row?.id }, request.business.id);
       return row;
     });
 
     a.delete('/api/admin/kiosks/:id', async (request) => {
-      await query('DELETE FROM kiosks WHERE id=$1', [Number(request.params.id)]);
-      await audit(request.user.id, 'kiosk.remove', { id: Number(request.params.id) });
+      await query('DELETE FROM kiosks WHERE id=$1 AND business_id=$2', [Number(request.params.id), request.business.id]);
+      await audit(request.user.id, 'kiosk.remove', { id: Number(request.params.id) }, request.business.id);
       return { ok: true };
     });
 
     // ----------------------------------------------------- visitor types & questions
-    a.get('/api/admin/visitor-types', async () => many('SELECT * FROM visitor_types ORDER BY sort, id'));
+    a.get('/api/admin/visitor-types', async (request) => many('SELECT * FROM visitor_types WHERE business_id = $1 ORDER BY sort, id', [request.business.id]));
 
     a.put('/api/admin/visitor-types/:id', async (request, reply) => {
       const b = request.body || {};
       const name = str(b.name, 60);
       if (!name) return bad(reply, 'Enter a name.');
       await query(
-        `UPDATE visitor_types SET name=$2, ask_company=$3, ask_email=$4, ask_rego=$5, ask_induction_no=$6, require_host=$7, require_signature=$8, active=$9 WHERE id=$1`,
-        [Number(request.params.id), name, bool(b.ask_company), bool(b.ask_email), bool(b.ask_rego), bool(b.ask_induction_no), bool(b.require_host), bool(b.require_signature), bool(b.active)],
+        `UPDATE visitor_types SET name=$2, ask_company=$3, ask_email=$4, ask_rego=$5, ask_induction_no=$6, require_host=$7, require_signature=$8, active=$9
+          WHERE id=$1 AND business_id=$10`,
+        [Number(request.params.id), name, bool(b.ask_company), bool(b.ask_email), bool(b.ask_rego), bool(b.ask_induction_no), bool(b.require_host), bool(b.require_signature), bool(b.active), request.business.id],
       );
       return { ok: true };
     });
 
-    a.get('/api/admin/questions', async () => many('SELECT * FROM safety_questions WHERE active ORDER BY sort, id'));
+    a.get('/api/admin/questions', async (request) => many('SELECT * FROM safety_questions WHERE business_id = $1 AND active ORDER BY sort, id', [request.business.id]));
 
     a.put('/api/admin/questions', async (request, reply) => {
       const list = Array.isArray(request.body?.questions) ? request.body.questions : null;
       if (!list) return bad(reply, 'No questions sent.');
+      const B = request.business.id;
       await tx(async (c) => {
-        await c.query('UPDATE safety_questions SET active=false');
+        await c.query('UPDATE safety_questions SET active=false WHERE business_id = $1', [B]);
         for (const [i, q] of list.entries()) {
           const text = str(q.text, 200);
           if (!text) continue;
           const flag = q.flag_answer === 'no' ? 'no' : 'yes';
-          if (q.id) await c.query('UPDATE safety_questions SET text=$2, flag_answer=$3, sort=$4, active=true WHERE id=$1', [Number(q.id), text, flag, i]);
-          else await c.query('INSERT INTO safety_questions (text, flag_answer, sort) VALUES ($1,$2,$3)', [text, flag, i]);
+          const upd = q.id ? await c.query('UPDATE safety_questions SET text=$2, flag_answer=$3, sort=$4, active=true WHERE id=$1 AND business_id=$5', [Number(q.id), text, flag, i, B]) : { rowCount: 0 };
+          if (!upd.rowCount) await c.query('INSERT INTO safety_questions (business_id, text, flag_answer, sort) VALUES ($4,$1,$2,$3)', [text, flag, i, B]);
         }
       });
-      await audit(request.user.id, 'questions.save');
-      return many('SELECT * FROM safety_questions WHERE active ORDER BY sort, id');
+      await audit(request.user.id, 'questions.save', null, B);
+      return many('SELECT * FROM safety_questions WHERE business_id = $1 AND active ORDER BY sort, id', [B]);
     });
 
     // ----------------------------------------------------------------- settings
-    a.get('/api/admin/settings', async () => safeSettings(await getSettings()));
+    a.get('/api/admin/settings', async (request) => safeSettings(await getSettings(request.business.id)));
 
     a.put('/api/admin/settings/:section', async (request, reply) => {
       const section = request.params.section;
-      const current = await getSettings();
+      const B = request.business.id;
+      const current = await getSettings(B);
       const b = request.body || {};
       let next;
       if (section === 'branding') {
@@ -395,6 +442,32 @@ export default async function adminRoutes(app) {
         const text = typeof b.text === 'string' ? b.text.trim().slice(0, 8000) : current.safety.text;
         if (!text) return bad(reply, 'The Health & Safety text can’t be empty.');
         next = { text, version: text === current.safety.text ? current.safety.version : current.safety.version + 1 };
+      } else if (section === 'hours') {
+        const tz = str(b.timezone, 60) || current.hours.timezone;
+        if (!validTimeZone(tz)) return bad(reply, 'That time zone isn’t recognised. Use a name like Pacific/Auckland.');
+        const days = {};
+        for (const d of DAYS) {
+          const v = b.days?.[d] || current.hours.days[d];
+          const start = TIME_RE.test(v.start || '') ? v.start : current.hours.days[d].start;
+          const end = TIME_RE.test(v.end || '') ? v.end : current.hours.days[d].end;
+          if (bool(v.open) && start >= end) return bad(reply, `Closing time must be after opening time (${d}).`);
+          days[d] = { open: bool(v.open), start, end };
+        }
+        const a2 = b.autoSignOut || {};
+        const mode = ['off', 'time', 'closing'].includes(a2.mode) ? a2.mode : 'time';
+        if (mode === 'time' && !TIME_RE.test(a2.time || '')) return bad(reply, 'Enter the automatic sign-out time as HH:MM, e.g. 23:00.');
+        next = {
+          timezone: tz,
+          days,
+          autoSignOut: {
+            mode,
+            time: TIME_RE.test(a2.time || '') ? a2.time : current.hours.autoSignOut.time,
+            afterClosingMins: Math.min(600, Math.max(0, Math.round(Number(a2.afterClosingMins) || 0))),
+            visitors: bool(a2.visitors),
+            staff: bool(a2.staff),
+            emailReception: bool(a2.emailReception),
+          },
+        };
       } else if (section === 'privacy') {
         next = {
           notice: str(b.notice, 600),
@@ -403,15 +476,16 @@ export default async function adminRoutes(app) {
       } else {
         return reply.code(404).send({ error: 'Unknown settings section.' });
       }
-      await saveSetting(section, next);
-      await audit(request.user.id, `settings.${section}`);
-      return safeSettings(await getSettings());
+      await saveSetting(B, section, next);
+      if (section === 'branding' && next.companyName) await query('UPDATE businesses SET name = $2 WHERE id = $1', [B, next.companyName]);
+      await audit(request.user.id, `settings.${section}`, null, B);
+      return safeSettings(await getSettings(B));
     });
 
     a.post('/api/admin/email/test', async (request, reply) => {
       const to = str(request.body?.to, 160);
       if (!EMAIL_RE.test(to)) return bad(reply, 'Enter the address to send the test to.');
-      const { email, branding } = await getSettings();
+      const { email, branding } = await getSettings(request.business.id);
       try {
         await sendMail(email, { to, ...testEmail(branding) });
         return { ok: true };
@@ -420,12 +494,13 @@ export default async function adminRoutes(app) {
       }
     });
 
-    a.get('/api/admin/notifications', async () => many(
-      `SELECT id, kind, recipient, subject, status, attempts, last_error, created_at, sent_at FROM notifications ORDER BY id DESC LIMIT 100`,
+    a.get('/api/admin/notifications', async (request) => many(
+      `SELECT id, kind, recipient, subject, status, attempts, last_error, created_at, sent_at FROM notifications WHERE business_id = $1 ORDER BY id DESC LIMIT 100`,
+      [request.business.id],
     ));
 
     a.post('/api/admin/notifications/:id/retry', async (request) => {
-      await query(`UPDATE notifications SET status='pending', next_attempt_at=now(), created_at=now() WHERE id=$1`, [Number(request.params.id)]);
+      await query(`UPDATE notifications SET status='pending', next_attempt_at=now(), created_at=now() WHERE id=$1 AND business_id=$2`, [Number(request.params.id), request.business.id]);
       return { ok: true };
     });
 
@@ -447,16 +522,16 @@ export default async function adminRoutes(app) {
     });
 
     // -------------------------------------------------------------- admin users
-    a.get('/api/admin/users', async () => many('SELECT id, name, email, role, created_at, last_login_at FROM admin_users ORDER BY name'));
+    a.get('/api/admin/users', async (request) => many('SELECT id, name, email, role, is_host, created_at, last_login_at FROM admin_users WHERE business_id = $1 ORDER BY name', [request.business.id]));
 
     a.post('/api/admin/users', async (request, reply) => {
       const { name, email, password } = request.body || {};
       if (!str(name) || !EMAIL_RE.test(email || '')) return bad(reply, 'Enter a name and a valid email.');
       if (!password || password.length < 10) return bad(reply, 'Use a password of at least 10 characters.');
       try {
-        const row = await one('INSERT INTO admin_users (name, email, password_hash) VALUES ($1, lower($2), $3) RETURNING id, name, email',
-          [str(name, 120), email.trim(), await hashPassword(password)]);
-        await audit(request.user.id, 'user.add', { id: row.id });
+        const row = await one('INSERT INTO admin_users (name, email, password_hash, business_id) VALUES ($1, lower($2), $3, $4) RETURNING id, name, email',
+          [str(name, 120), email.trim(), await hashPassword(password), request.business.id]);
+        await audit(request.user.id, 'user.add', { id: row.id }, request.business.id);
         return row;
       } catch (e) {
         if (e.code === '23505') return bad(reply, 'That email already has an account.');
@@ -466,8 +541,10 @@ export default async function adminRoutes(app) {
 
     a.delete('/api/admin/users/:id', async (request, reply) => {
       if (Number(request.params.id) === request.user.id) return bad(reply, 'You can’t remove your own account.');
-      await query('DELETE FROM admin_users WHERE id=$1', [Number(request.params.id)]);
-      await audit(request.user.id, 'user.remove', { id: Number(request.params.id) });
+      // Business admins can't remove a Host Admin; Host Admins are managed in the Host console.
+      const r = await query('DELETE FROM admin_users WHERE id=$1 AND business_id=$2 AND (NOT is_host OR $3)', [Number(request.params.id), request.business.id, !!request.user.is_host]);
+      if (!r.rowCount) return bad(reply, 'That account can’t be removed here.');
+      await audit(request.user.id, 'user.remove', { id: Number(request.params.id) }, request.business.id);
       return { ok: true };
     });
 

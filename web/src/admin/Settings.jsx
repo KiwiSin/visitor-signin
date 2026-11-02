@@ -6,6 +6,7 @@ import { colorsOf, contrast, isDark, logoFor, PRESETS, readableOn } from '../the
 
 const TABS = [
   ['branding', 'Branding'],
+  ['hours', 'Business hours'],
   ['email', 'Email & alerts'],
   ['safety', 'Health & Safety'],
   ['types', 'Visit types'],
@@ -47,6 +48,7 @@ export default function Settings({ onBrandingChange, user }) {
       {!settings ? <p>Loading…</p> : (
         <>
           {tab === 'branding' && <Branding settings={settings} save={save} setFlash={setFlash} />}
+          {tab === 'hours' && <Hours settings={settings} save={save} />}
           {tab === 'email' && <Email settings={settings} save={save} setFlash={setFlash} />}
           {tab === 'safety' && <Safety settings={settings} save={save} setFlash={setFlash} />}
           {tab === 'types' && <Types setFlash={setFlash} />}
@@ -275,6 +277,80 @@ function Preview({ b, wp }) {
         <span style={{ padding: '6px 10px', borderRadius: 8, background: `color-mix(in srgb, ${c.navText} 12%, transparent)`, fontWeight: 600 }}>Dashboard</span>
         <span style={{ padding: '0 10px', opacity: 0.85 }}>Visitor log</span>
       </div>
+    </>
+  );
+}
+
+/* ------------------------------------------------------------------- Hours */
+const DAY_NAMES = [['mon', 'Monday'], ['tue', 'Tuesday'], ['wed', 'Wednesday'], ['thu', 'Thursday'], ['fri', 'Friday'], ['sat', 'Saturday'], ['sun', 'Sunday']];
+const TIME_ZONES = typeof Intl.supportedValuesOf === 'function' ? Intl.supportedValuesOf('timeZone') : ['Pacific/Auckland', 'Australia/Sydney', 'Europe/London', 'America/New_York'];
+
+function fmt12(t) {
+  const [h, m] = t.split(':').map(Number);
+  return `${((h + 11) % 12) + 1}:${String(m).padStart(2, '0')} ${h < 12 ? 'am' : 'pm'}`;
+}
+
+function Hours({ settings, save }) {
+  const [h, setH] = useState(settings.hours);
+  const a = h.autoSignOut;
+  const setDay = (d, patch) => setH({ ...h, days: { ...h.days, [d]: { ...h.days[d], ...patch } } });
+  const setA = (patch) => setH({ ...h, autoSignOut: { ...a, ...patch } });
+  const copyMon = () => setH({ ...h, days: Object.fromEntries(DAY_NAMES.map(([d]) => [d, ['sat', 'sun'].includes(d) ? h.days[d] : { ...h.days.mon }])) });
+  const summary = a.mode === 'off' || (!a.visitors && !a.staff)
+    ? 'Nobody is signed out automatically.'
+    : `Every day at ${a.mode === 'time' ? fmt12(a.time) : `closing time + ${a.afterClosingMins} min`}, ${[a.visitors && 'visitors', a.staff && 'staff'].filter(Boolean).join(' and ')} still signed in are signed out.`;
+  return (
+    <>
+      <section className="a-card">
+        <h2>Opening hours</h2>
+        <p className="sub">Used for the “after closing time” sign-out below, and kept for future features such as after-hours messages.</p>
+        <label className="a-field" style={{ maxWidth: 320 }}>Time zone
+          <select className="a-select" value={h.timezone} onChange={(e) => setH({ ...h, timezone: e.target.value })}>
+            {TIME_ZONES.map((tz) => <option key={tz} value={tz}>{tz.replace(/_/g, ' ')}</option>)}
+          </select>
+        </label>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {DAY_NAMES.map(([d, label]) => (
+            <div key={d} className="a-toggle-row" style={{ justifyContent: 'flex-start', gap: 16, flexWrap: 'wrap' }}>
+              <span style={{ width: 110, fontWeight: 600 }}>{label}</span>
+              <Toggle on={h.days[d].open} label={`${label} open`} onChange={(v) => setDay(d, { open: v })} />
+              {h.days[d].open ? (
+                <span className="a-row" style={{ gap: 8 }}>
+                  <input className="a-input" type="time" aria-label={`${label} opens`} value={h.days[d].start} onChange={(e) => setDay(d, { start: e.target.value })} style={{ width: 130 }} />
+                  <span>to</span>
+                  <input className="a-input" type="time" aria-label={`${label} closes`} value={h.days[d].end} onChange={(e) => setDay(d, { end: e.target.value })} style={{ width: 130 }} />
+                </span>
+              ) : <span className="muted" style={{ color: 'var(--muted)' }}>Closed</span>}
+            </div>
+          ))}
+        </div>
+        <div><button type="button" className="a-btn sm" onClick={copyMon}>Copy Monday’s hours to Tuesday–Friday</button></div>
+      </section>
+      <section className="a-card">
+        <h2>Automatic sign-out</h2>
+        <p className="sub">Signs out anyone who forgot, so the on-site list and emergency roll calls stay accurate. The visitor log shows these as “Signed out automatically”.</p>
+        <div className="a-tabs">
+          {[['time', 'At a set time'], ['closing', 'After closing time'], ['off', 'Off']].map(([k, label]) => (
+            <button key={k} type="button" className={a.mode === k ? 'on' : ''} onClick={() => setA({ mode: k })}>{label}</button>
+          ))}
+        </div>
+        {a.mode === 'time' && (
+          <label className="a-field" style={{ maxWidth: 200 }}>Time each day<input className="a-input" type="time" value={a.time} onChange={(e) => setA({ time: e.target.value })} /></label>
+        )}
+        {a.mode === 'closing' && (
+          <label className="a-field" style={{ maxWidth: 320 }}>Minutes after closing time <span className="hint">On closed days the set time ({fmt12(a.time)}) is used</span>
+            <input className="a-input" type="number" min="0" max="600" step="15" value={a.afterClosingMins} onChange={(e) => setA({ afterClosingMins: Number(e.target.value) })} /></label>
+        )}
+        {a.mode !== 'off' && (
+          <>
+            <div className="a-toggle-row"><span>Sign out visitors and contractors</span><Toggle on={a.visitors} label="Sign out visitors" onChange={(v) => setA({ visitors: v })} /></div>
+            <div className="a-toggle-row"><span>Sign out staff</span><Toggle on={a.staff} label="Sign out staff" onChange={(v) => setA({ staff: v })} /></div>
+            <div className="a-toggle-row"><span>Email the reception mailbox a list of who was signed out</span><Toggle on={a.emailReception} label="Email reception" onChange={(v) => setA({ emailReception: v })} /></div>
+          </>
+        )}
+        <div className="a-msg ok" style={{ fontWeight: 500 }}>{summary}</div>
+      </section>
+      <div><button type="button" className="a-btn primary" onClick={() => save('hours', h, 'Business hours saved.')}>Save business hours</button></div>
     </>
   );
 }

@@ -9,15 +9,15 @@ export function esc(value) {
     .replace(/'/g, '&#39;');
 }
 
-export function formatTime(date) {
+export function formatTime(date, tz = config.timeZone) {
   return new Intl.DateTimeFormat('en-NZ', {
-    timeZone: config.timeZone, hour: 'numeric', minute: '2-digit',
+    timeZone: tz || config.timeZone, hour: 'numeric', minute: '2-digit',
   }).format(new Date(date));
 }
 
-export function formatDateTime(date) {
+export function formatDateTime(date, tz = config.timeZone) {
   return new Intl.DateTimeFormat('en-NZ', {
-    timeZone: config.timeZone, weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit',
+    timeZone: tz || config.timeZone, weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit',
   }).format(new Date(date));
 }
 
@@ -40,12 +40,12 @@ function absolute(url) {
  * The email a host (or reception) receives when a visitor signs in.
  * kind: host | team | reception | flagged
  */
-export function arrivalEmail({ branding, visit, kind }) {
+export function arrivalEmail({ branding, visit, kind, tz }) {
   const accent = /^#[0-9a-f]{6}$/i.test(branding.accent) ? branding.accent : '#0F766E';
   const accentText = /^#[0-9a-f]{6}$/i.test(branding.colors?.accentText || '') ? branding.colors.accentText : '#ffffff';
   const logo = absolute(isDark(accent) ? (branding.logo || branding.logoOnLight) : (branding.logoOnLight || branding.logo));
   const first = (visit.hostName || '').split(' ')[0];
-  const when = formatTime(visit.signedInAt);
+  const when = formatTime(visit.signedInAt, tz);
   const flaggedRows = (visit.answers || []).filter((a) => a.flagged);
 
   let heading;
@@ -112,14 +112,14 @@ ${kind === 'host' ? `<p style="margin:18px 0 0;font-size:15px;color:#374151">Ple
   return { subject, html, text };
 }
 
-export function rollCallEmail({ branding, rc, url }) {
+export function rollCallEmail({ branding, rc, url, tz }) {
   const total = rc.entries.length;
-  const subject = `EMERGENCY ROLL CALL started at ${formatTime(rc.startedAt)} (${total} on site)`;
+  const subject = `EMERGENCY ROLL CALL started at ${formatTime(rc.startedAt, tz)} (${total} on site)`;
   const html = `<!doctype html><html><body style="margin:0;padding:24px;background:#F3F4F6;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#111827">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;margin:0 auto;background:#ffffff;border-radius:10px;overflow:hidden">
 <tr><td style="background:#B91C1C;padding:16px 24px;color:#ffffff;font-size:15px;font-weight:800;letter-spacing:1px">EVACUATION · ROLL CALL STARTED</td></tr>
 <tr><td style="padding:24px">
-<p style="margin:0 0 14px;font-size:16px;line-height:1.5">${esc(rc.startedBy)} started a roll call at ${esc(formatTime(rc.startedAt))}. <strong>${total}</strong> ${total === 1 ? 'person was' : 'people were'} on site.</p>
+<p style="margin:0 0 14px;font-size:16px;line-height:1.5">${esc(rc.startedBy)} started a roll call at ${esc(formatTime(rc.startedAt, tz))}. <strong>${total}</strong> ${total === 1 ? 'person was' : 'people were'} on site.</p>
 <p style="margin:0 0 18px"><a href="${esc(url)}" style="display:inline-block;background:#B91C1C;color:#ffffff;padding:12px 20px;border-radius:8px;font-weight:700;text-decoration:none">Open the roll call</a></p>
 <p style="margin:0 0 8px;font-size:14px;font-weight:700">On site when it started</p>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="font-size:14px;border:1px solid #E5E7EB;border-radius:8px">
@@ -128,11 +128,25 @@ ${rc.entries.map((e) => `<tr><td style="padding:7px 12px;border-bottom:1px solid
 <p style="margin:18px 0 0;font-size:12px;color:#6B7280">This list is a copy in case phones or Wi-Fi are down. Sent by ${esc(branding.appName)}.</p>
 </td></tr></table></body></html>`;
   const text = [
-    `EMERGENCY ROLL CALL started by ${rc.startedBy} at ${formatTime(rc.startedAt)}. ${total} on site.`,
+    `EMERGENCY ROLL CALL started by ${rc.startedBy} at ${formatTime(rc.startedAt, tz)}. ${total} on site.`,
     `Open: ${url}`,
     '',
     ...rc.entries.map((e) => `- ${e.name} (${e.detail || ''}) ${e.mobile || ''}`),
   ].join('\n');
+  return { subject, html, text };
+}
+
+/** Daily list of people the automatic sign-out signed out. */
+export function autoSignOutEmail({ branding, visitors, staff, tz }) {
+  const rows = [...visitors.map((v) => [v.name, `${v.type}${v.host ? ` · host ${v.host}` : ''}`, formatTime(v.signed_in_at, tz)]),
+    ...staff.map((s) => [s.name, 'Staff', s.presence_at ? formatTime(s.presence_at, tz) : ''])];
+  const subject = `${rows.length} ${rows.length === 1 ? 'person was' : 'people were'} signed out automatically`;
+  const html = `<p>These people were still signed in at ${esc(branding.companyName)} and were signed out automatically:</p>
+<table cellpadding="6" style="border-collapse:collapse;font-family:Arial,sans-serif;font-size:14px">
+<tr><th align="left">Name</th><th align="left">Who</th><th align="left">Signed in</th></tr>
+${rows.map((r) => `<tr><td>${esc(r[0])}</td><td>${esc(r[1])}</td><td>${esc(r[2])}</td></tr>`).join('')}
+</table><p style="color:#6B7280;font-size:12px">Sent by ${esc(branding.appName)}.</p>`;
+  const text = [`Signed out automatically at ${branding.companyName}:`, ...rows.map((r) => `- ${r[0]} (${r[1]}) in since ${r[2]}`)].join('\n');
   return { subject, html, text };
 }
 

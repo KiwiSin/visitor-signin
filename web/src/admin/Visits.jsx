@@ -1,3 +1,4 @@
+import { apiUrl } from '../tenant.js';
 import { useCallback, useEffect, useState } from 'react';
 import { api, fmtDateTime, fmtTime } from '../api.js';
 import { Modal, useFlash } from './AdminApp.jsx';
@@ -30,7 +31,7 @@ export default function Visits() {
     <>
       <div className="a-head">
         <div><h1>Visitor log</h1><p>Every sign-in, newest first. Records are deleted automatically after the retention period in Settings.</p></div>
-        <div className="a-actions"><a className="a-btn" href={`/api/admin/visits.csv?${params}`}>Export CSV</a></div>
+        <div className="a-actions"><a className="a-btn" href={apiUrl(`/api/admin/visits.csv?${params}`)}>Export CSV</a></div>
       </div>
       {flash}
       <div className="a-card">
@@ -86,7 +87,7 @@ export default function Visits() {
           {open.has_signature && (
             <div>
               <div className="muted" style={{ fontSize: 14, marginBottom: 6 }}>Signature</div>
-              <img src={`/api/admin/visits/${open.id}/signature`} alt={`Signature of ${open.name}`} style={{ width: '100%', border: '1px solid var(--line)', borderRadius: 10 }} />
+              <img src={apiUrl(`/api/admin/visits/${open.id}/signature`)} alt={`Signature of ${open.name}`} style={{ width: '100%', border: '1px solid var(--line)', borderRadius: 10 }} />
             </div>
           )}
           <div className="a-row" style={{ justifyContent: 'flex-end' }}>
