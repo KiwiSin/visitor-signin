@@ -36,7 +36,8 @@ export async function buildApp({ logger = true } = {}) {
   // Basic security headers for every response.
   app.addHook('onSend', async (request, reply, payload) => {
     reply.header('X-Content-Type-Options', 'nosniff');
-    reply.header('Referrer-Policy', 'same-origin');
+    // Other sites see only our address (no paths or links); OpenStreetMap's map tiles require it.
+    reply.header('Referrer-Policy', 'strict-origin-when-cross-origin');
     reply.header('X-Frame-Options', 'SAMEORIGIN');
     return payload;
   });

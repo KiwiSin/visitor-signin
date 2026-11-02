@@ -31,6 +31,7 @@ export default function PhoneSettings({ settings, save, setFlash }) {
     const m = L.map(mapEl.current, { scrollWheelZoom: false }).setView(has ? [p.lat, p.lng] : NZ, has ? 16 : 5);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19,
+      referrerPolicy: 'strict-origin-when-cross-origin', // OpenStreetMap refuses tiles without it
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
     }).addTo(m);
     map.current = m;
