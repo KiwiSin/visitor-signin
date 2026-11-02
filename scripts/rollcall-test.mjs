@@ -8,7 +8,7 @@ const staff=await j('/api/admin/staff'); const jane=staff.find(s=>s.name==='Jane
 const groups=await j('/api/admin/groups'); const fw=groups.find(g=>g.key==='fire_warden');
 ok(jane.group_ids.includes(fw.id),'Jane is in the Fire warden group (from the CSV role)');
 const link=await j(`/api/admin/staff/${jane.id}/phone-link`,{method:'POST',body:{send:false}});
-const invite=link.url.split('#invite=')[1]; ok(invite&&link.url.includes('/me#invite='),'staff phone link made');
+const invite=link.url.split('?invite=')[1]; ok(invite&&link.url.includes('/me?invite='),'staff phone link made');
 const admCookie=cookie; cookie='';
 const claim=await j('/api/me/claim',{method:'POST',body:{invite},h:{}});
 const W={'X-Staff-Token':claim.token};

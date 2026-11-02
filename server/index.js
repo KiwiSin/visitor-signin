@@ -84,12 +84,39 @@ export async function buildApp({ logger = true } = {}) {
   app.setNotFoundHandler((request, reply) => {
     if (request.method === 'GET' && !request.url.startsWith('/api/') && !request.url.startsWith('/uploads/') && hasWeb) {
       reply.header('Cache-Control', 'no-cache');
-      return reply.sendFile('index.html', config.webDist);
+      const page = pageHead(request.url);
+      if (!page) return reply.sendFile('index.html', config.webDist);
+      return reply.type('text/html; charset=utf-8').send(withHead(fs.readFileSync(path.join(config.webDist, 'index.html'), 'utf8'), page));
     }
     return reply.code(404).send({ error: 'Not found' });
   });
 
   return app;
+}
+
+/**
+ * Phones read the home-screen details (manifest, icon, name) as the page loads, so the staff app and the
+ * roll call get their own from the server, not the reception iPad's.
+ */
+export function pageHead(url) {
+  const u = new URL(url, 'http://x');
+  const m = /^(\/b\/([a-z0-9-]{1,48}))?\/(me|rollcall)\/?$/.exec(u.pathname);
+  if (!m) return null;
+  const api = m[2] ? `/api/b/${m[2]}/public/manifest/` : '/api/public/manifest/';
+  if (m[3] === 'rollcall') return { manifest: `${api}rollcall`, title: 'Roll call', icon: '/icons/rollcall-touch-icon.png', theme: '#B91C1C' };
+  const invite = u.searchParams.get('invite');
+  const q = invite && /^[A-Za-z0-9_-]{10,100}$/.test(invite) ? `?invite=${invite}` : '';
+  return { manifest: `${api}me${q}`, title: 'Sign in', icon: '/icons/apple-touch-icon.png' };
+}
+
+export function withHead(html, page) {
+  let out = html
+    .replace(/<link rel="manifest" href="[^"]*"/, `<link rel="manifest" href="${page.manifest}"`)
+    .replace(/<meta name="apple-mobile-web-app-title" content="[^"]*"/, `<meta name="apple-mobile-web-app-title" content="${page.title}"`)
+    .replace(/<link rel="apple-touch-icon" href="[^"]*"/, `<link rel="apple-touch-icon" href="${page.icon}"`)
+    .replace(/<title>[^<]*<\/title>/, `<title>${page.title}</title>`);
+  if (page.theme) out = out.replace(/<meta name="theme-color" content="[^"]*"/, `<meta name="theme-color" content="${page.theme}"`);
+  return out;
 }
 
 async function main() {

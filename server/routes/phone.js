@@ -72,7 +72,7 @@ async function makePhoneLink(business, staff, { send }) {
     `UPDATE staff SET phone_invite_hash = $2, phone_invite_expires = now() + ($3 || ' days')::interval WHERE id = $1`,
     [staff.id, sha256(invite), String(INVITE_DAYS)],
   );
-  const url = `${businessUrl(business, '/me')}#invite=${invite}`;
+  const url = `${businessUrl(business, '/me')}?invite=${invite}`;
   if (!send) return { url, emailed: false };
   if (!staff.email) throw Object.assign(new Error(`${staff.name} has no email address.`), { statusCode: 400 });
   const { email, branding } = await getSettings(business.id);

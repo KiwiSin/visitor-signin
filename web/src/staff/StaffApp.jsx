@@ -11,7 +11,8 @@ const setKey = (v) => { try { v ? localStorage.setItem(STAFF_KEY, v) : localStor
 
 const isStandalone = () => window.matchMedia?.('(display-mode: standalone)').matches || window.navigator.standalone === true;
 const isIOS = () => /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-const inviteFromHash = () => /invite=([A-Za-z0-9_-]+)/.exec(window.location.hash)?.[1] || null;
+// New links carry ?invite=…; links sent before 3 Nov 2026 carry #invite=…
+const inviteFromUrl = () => /invite=([A-Za-z0-9_-]+)/.exec(window.location.search + window.location.hash)?.[1] || null;
 
 /** Ask the phone where it is. Resolves to { lat, lng, accuracy } or { error }. */
 function locate() {
@@ -46,7 +47,7 @@ function useHomeScreenDetails(invite) {
 
 export default function StaffApp() {
   const [token, setToken] = useState(getKey);
-  const [invite, setInvite] = useState(inviteFromHash);
+  const [invite, setInvite] = useState(inviteFromUrl);
   const [me, setMe] = useState(null);
   const [error, setError] = useState('');
   const [fatal, setFatal] = useState(null);
@@ -74,7 +75,12 @@ export default function StaffApp() {
   useEffect(() => {
     if (token || !invite) return;
     // On iPhone in Safari, wait: the home-screen app has its own storage, so it should claim the link itself.
-    if (isIOS() && !isStandalone()) { setStep('ios-home'); return; }
+    if (isIOS() && !isStandalone()) {
+      // An older #invite link: reload as ?invite so the page's home-screen details carry it.
+      if (!window.location.search.includes('invite=')) { window.location.replace(appPath(`/me?invite=${invite}`)); return; }
+      setStep('ios-home');
+      return;
+    }
     claim(invite);
   }, [token, invite, claim]);
 

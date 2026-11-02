@@ -55,8 +55,8 @@ ok((await j('/api/admin/staff')).find((s) => s.id === added.id).group_ids[0] ===
 
 // Link + claim
 const link = await j(`/api/admin/staff/${mike.id}/phone-link`, { method: 'POST', body: { send: true } });
-ok(link.emailed && link.url.includes('/me#invite='), 'phone link emailed');
-const invite = link.url.split('#invite=')[1];
+ok(link.emailed && link.url.includes('/me?invite='), 'phone link emailed');
+const invite = link.url.split('?invite=')[1];
 let st = (await j('/api/admin/staff')).find((s) => s.id === mike.id);
 ok(st.phone_invited && !st.phone_linked, 'Staff list shows "invite sent"');
 const claim = await j('/api/me/claim', { method: 'POST', body: { invite }, h: {} });
@@ -109,4 +109,11 @@ ok(true, 'removed phone stops working');
 const mf = await j('/api/public/manifest/me');
 const mfi = await j('/api/public/manifest/me?invite=abcdefghijkl12');
 ok(mf.start_url === '/me' && mfi.start_url === '/me#invite=abcdefghijkl12', 'home-screen manifest for the staff app (carries an unused link for iPhone)');
+// The page itself must carry the staff app's home-screen details (phones read them as the page loads).
+const page = async (p) => (await fetch(B + p)).text();
+const meHtml = await page('/me?invite=abcdefghijkl12');
+ok(meHtml.includes('href="/api/public/manifest/me?invite=abcdefghijkl12"') && meHtml.includes('<title>Sign in</title>'), 'staff page loads with the staff app home-screen details (not the kiosk’s)');
+ok((await page('/rollcall')).includes('href="/api/public/manifest/rollcall"'), 'roll call page loads with its own home-screen details');
+ok((await page('/kiosk')).includes('href="/manifest.webmanifest"'), 'kiosk unchanged');
+ok((await page('/b/acme/me')).includes('href="/api/b/acme/public/manifest/me"'), 'business staff page points at that business');
 console.log('staff phone app OK');
