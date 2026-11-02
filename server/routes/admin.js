@@ -218,7 +218,7 @@ export default async function adminRoutes(app) {
       if (s.email && !EMAIL_RE.test(s.email)) return bad(reply, 'That email address doesn’t look right.');
       try {
         await query(
-          `UPDATE staff SET name=$2, email=nullif($3,''), mobile=nullif($4,''), team_id=(SELECT id FROM teams WHERE id = $5 AND business_id = $8),
+          `UPDATE staff SET name=$2, email=nullif($3,''), mobile=nullif($4,''), team_id=(SELECT id FROM teams WHERE id = $5 AND business_id = $7),
                   show_on_kiosk=$6, updated_at=now() WHERE id=$1 AND business_id=$7`,
           [Number(request.params.id), s.name, s.email, s.mobile, s.teamId, s.showOnKiosk, request.business.id],
         );

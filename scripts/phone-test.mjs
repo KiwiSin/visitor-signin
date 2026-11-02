@@ -42,6 +42,16 @@ const mike = staff.find((s) => s.name === 'Mike Patel');
 await j(`/api/admin/staff/${mike.id}/groups`, { method: 'PUT', body: { groupIds: [groups[1].id, g.id] } });
 ok((await j('/api/admin/groups')).find((x) => x.id === g.id).members === 1, 'Mike added to First aider + Forklift');
 await j(`/api/admin/groups/${g.id}`, { method: 'DELETE' });
+// The staff form: edit someone and set their groups (and team) in one save.
+const teams = await j('/api/admin/teams');
+await j(`/api/admin/staff/${mike.id}`, { method: 'PUT', body: { name: 'Mike Patel', email: mike.email, mobile: '021 555', teamId: teams[0].id, showOnKiosk: true, groupIds: [groups[0].id, groups[1].id] } });
+let m2 = (await j('/api/admin/staff')).find((s) => s.id === mike.id);
+ok(m2.group_ids.length === 2 && m2.role === 'warden' && m2.team_id === teams[0].id && m2.mobile === '021 555', 'staff form saves groups, team and details');
+await j(`/api/admin/staff/${mike.id}`, { method: 'PUT', body: { name: 'Mike Patel', email: mike.email, mobile: '021 555', teamId: '', showOnKiosk: true, groupIds: [groups[1].id] } });
+m2 = (await j('/api/admin/staff')).find((s) => s.id === mike.id);
+ok(m2.group_ids.length === 1 && m2.role === 'staff' && m2.team_id === null, 'taking someone out of Fire warden and their team saves');
+const added = await j('/api/admin/staff', { method: 'POST', body: { name: 'New Person', email: 'new.person@acme.co.nz', teamId: teams[0].id, showOnKiosk: true, groupIds: [groups[2].id] } });
+ok((await j('/api/admin/staff')).find((s) => s.id === added.id).group_ids[0] === groups[2].id, 'adding a new person with a group saves');
 
 // Link + claim
 const link = await j(`/api/admin/staff/${mike.id}/phone-link`, { method: 'POST', body: { send: true } });
