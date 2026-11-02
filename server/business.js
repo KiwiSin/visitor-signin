@@ -101,6 +101,9 @@ export async function createBusiness({ name, slug }) {
         [b.id, key, tname, sort, induction, host, sig],
       );
     }
+    for (const [key, gname, color, sort] of [['fire_warden', 'Fire warden', '#B91C1C', 1], ['first_aider', 'First aider', '#15803D', 2], ['management', 'Management', '#7C3AED', 3]]) {
+      await c.query('INSERT INTO staff_groups (business_id, key, name, color, sort) VALUES ($1,$2,$3,$4,$5)', [b.id, key, gname, color, sort]);
+    }
     for (const [i, q] of (platform.defaultQuestions || []).entries()) {
       await c.query('INSERT INTO safety_questions (business_id, text, flag_answer, sort) VALUES ($1,$2,$3,$4)', [b.id, q.text, q.flag_answer === 'no' ? 'no' : 'yes', i + 1]);
     }

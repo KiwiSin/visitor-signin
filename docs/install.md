@@ -67,14 +67,32 @@ The link only works until the first admin is created. If you lose it, restart th
 
 To move a tablet or replace an iPad, click **Re-pair** in Admin and enter the new code.
 
-## 7. Set up the fire wardens
+## 7. Staff phone sign-in and fire wardens
 
-1. In **Staff & teams**, set each warden's role to **Fire warden**, then click **Send roll call link**. Email it, or copy it and send it another way.
-2. The warden opens the link **on their phone** and adds it to the home screen (iPhone: Share › Add to Home Screen; Android: ⋮ › Add to Home screen). It opens as "Roll call".
-3. The phone keeps a copy of who is on site each time the app is opened. In an evacuation, wardens open it as they leave the building; it then works at the assembly point with no Wi-Fi.
-4. Run a drill: start a roll call from a phone, tick people safe, end it, and check the report in **Admin › Roll calls**.
+Staff can sign themselves in and out from their own phone with one tap, so they don't need to stop at the reception iPad.
 
-Who appears in a roll call: visitors and contractors signed in, and staff marked **In** on the tablet. Anyone else can be added by name on the spot. A roll call can also be started from the reception iPad (**Staff in / out › Emergency roll call**). If a warden's phone is lost, open their link settings and click **Turn off link**.
+**Set up the site (once):** **Settings › Staff phone app**.
+- Find your address, or stand at reception and click **Use this device's location**, then check the pin is on your building. Drag it if not.
+- **Distance allowed:** 200 m suits most sites. Phones indoors can be 50–100 m out; the app allows for that.
+- **Allow signing out from anywhere** is on by default, for people who leave and forget.
+- **If the phone won't share its location:** *Don't allow* (default) means they sign in on the reception iPad instead.
+- Locations are checked when someone taps Sign In, then thrown away. Nothing is stored or tracked. The check works on any Wi-Fi or mobile data.
+- Phones only share their location with sites on **https**, so the reverse proxy in step 3 is required for this.
+
+**Send the links:** click **Email links to N staff without one** (Settings › Staff phone app), or open someone in **Staff & teams** and use **Phone sign-in › Email link**. Each link works on one phone and expires after 7 days if it isn't opened. On a new phone, send a new link; the old phone stops working once it is opened.
+
+**What staff do:** open the email **on their phone** and tap **Open my sign-in**.
+- iPhone: it asks them to tap Share › **Add to Home Screen** first, then open **Sign in** from the home screen (iPhone keeps home-screen apps separate from Safari, so the link finishes setting up there).
+- Android: it sets up straight away; then ⋮ › **Add to Home screen**.
+- The first time they tap **Sign In**, the phone asks to share its location: choose **Allow**.
+
+**Groups:** in **Staff & teams**, tap groups on each person (Fire warden, First aider, Management, or add your own with **+ Group**). Groups show in the staff list and can be used to filter it. The CSV import takes a `groups` column, separated by `;` (e.g. `Fire warden; First aider`).
+
+**Fire wardens:** people in the **Fire warden** group see an **Emergency roll call** button in their phone app and are emailed when a roll call starts. No separate link is needed.
+1. The phone keeps a copy of who is on site each time the roll call is opened. In an evacuation, wardens open it as they leave the building; it then works at the assembly point with no Wi-Fi.
+2. Run a drill: start a roll call from a phone, tick people safe, end it, and check the report in **Admin › Roll calls**.
+
+Who appears in a roll call: visitors and contractors signed in, and staff marked **In** (on the tablet, their phone, or by an admin). Anyone else can be added by name on the spot. A roll call can also be started from the reception iPad (**Staff in / out › Emergency roll call**). If someone's phone is lost, open them in **Staff & teams** and click **Turn off phone sign-in**.
 
 ## 8. Check it works
 

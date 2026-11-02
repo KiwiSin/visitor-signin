@@ -28,7 +28,8 @@ New businesses start with a copy of the **Defaults for new businesses** (H&S tex
 | --- | --- |
 | Business admin | `https://your-server/b/acme-ltd/admin` |
 | Reception iPad | `https://your-server/b/acme-ltd/kiosk` |
-| Warden roll call | `https://your-server/b/acme-ltd/rollcall#key=…` (personal link) |
+| Staff phone app | `https://your-server/b/acme-ltd/me#invite=…` (personal link, emailed from Admin) |
+| Roll call | `https://your-server/b/acme-ltd/rollcall` (fire wardens, from the staff app) |
 | Setup link | `https://your-server/b/acme-ltd/setup?token=…` |
 | Host console | `https://your-server/host` |
 
@@ -38,7 +39,7 @@ A tablet that pairs at `/kiosk` moves itself to its business's own address, so i
 
 ## Pausing and deleting
 
-- **Pause** (Manage › Active switch off): the business's tablets, admins and warden links stop working; its data is kept. Turn it back on to resume.
+- **Pause** (Manage › Active switch off): the business's tablets, admins and staff phone apps stop working; its data is kept. Turn it back on to resume.
 - **Delete**: removes the business and all its data (staff, tablets, visits, signatures, roll calls, settings). You must type its web address to confirm. Host Admins attached to it keep their accounts.
 
 ## Moving to your own domain later
@@ -49,7 +50,7 @@ When you buy a domain you can give each business its own subdomain, e.g. `acme.s
 2. Reverse proxy: a certificate covering both (a wildcard certificate via DNS challenge), forwarding all of them to the app.
 3. Stack environment: `APP_URL=https://signin.example.com` and `BASE_DOMAIN=signin.example.com`. Redeploy.
 
-Links the app makes (setup links, warden links, emails) then use the subdomain form. The `/b/<web-address>/` form keeps working too, so nothing already sent breaks.
+Links the app makes (setup links, staff phone links, emails) then use the subdomain form. The `/b/<web-address>/` form keeps working too, so nothing already sent breaks.
 
 ## Business hours and automatic sign-out
 

@@ -2,8 +2,8 @@
 // - Pages: network first, fall back to the cached copy.
 // - Built assets, icons, wallpapers, uploaded logos: cache first.
 // - API calls are never cached here (the kiosk keeps its own copy of the data).
-const CACHE = 'vs-shell-v2';
-const SHELL = ['/', '/kiosk', '/rollcall', '/manifest-rollcall.webmanifest', '/icons/rollcall-192.png', '/manifest.webmanifest', '/logo-white.svg', '/logo.svg', '/icons/icon.svg',
+const CACHE = 'vs-shell-v3';
+const SHELL = ['/', '/kiosk', '/rollcall', '/me', '/manifest-rollcall.webmanifest', '/icons/rollcall-192.png', '/manifest.webmanifest', '/logo-white.svg', '/logo.svg', '/icons/icon.svg',
   '/wallpapers/mountains.jpg', '/wallpapers/coast.jpg', '/wallpapers/bush.jpg'];
 
 // Cache the page plus every script, stylesheet and font it uses, so the app opens with no connection.

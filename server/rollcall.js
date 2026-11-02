@@ -4,20 +4,19 @@ import { many, one, query, tx } from './db.js';
 import { sha256 } from './security.js';
 import { getSettings } from './settings.js';
 import { rollCallEmail } from './templates.js';
+import { isFireWarden, staffFromToken } from './routes/phone.js';
 
 const ACTIVE_WINDOW = "interval '12 hours'"; // a roll call left open longer than this is treated as finished
 
 /**
- * Who is using the roll call: a signed-in admin, a warden's personal link, or a paired tablet.
+ * Who is using the roll call: a signed-in admin, a fire warden's phone app, or a paired tablet.
  * Returns null if none.
  */
 export async function rollCallActor(request) {
-  // A warden link or a tablet decides the business itself; an admin uses the business in the address.
-  const warden = request.headers['x-warden-token'];
-  if (warden) {
-    const s = await one(`SELECT s.id, s.name, s.business_id FROM staff s JOIN businesses b ON b.id = s.business_id
-                          WHERE s.rollcall_key_hash = $1 AND s.active AND b.status = 'active'`, [sha256(String(warden))]);
-    if (s) return { type: 'warden', name: s.name, staffId: s.id, businessId: s.business_id };
+  // A staff phone or a tablet decides the business itself; an admin uses the business in the address.
+  if (request.headers['x-staff-token']) {
+    const s = await staffFromToken(request);
+    if (s && (await isFireWarden(s.id))) return { type: 'warden', name: s.name, staffId: s.id, businessId: s.business_id };
   }
   const kioskToken = request.headers['x-kiosk-token'];
   if (kioskToken) {
@@ -186,7 +185,8 @@ async function queueRollCallEmails(id, bid) {
   if (settings.email.method === 'none') return;
   const rc = await rollCallView(id, bid);
   const business = await one('SELECT id, slug FROM businesses WHERE id = $1', [bid]);
-  const wardens = await many(`SELECT DISTINCT lower(email) AS email FROM staff WHERE business_id = $1 AND active AND role = 'warden' AND email IS NOT NULL AND email <> ''`, [bid]);
+  const wardens = await many(`SELECT DISTINCT lower(s.email) AS email FROM staff s JOIN staff_group_members m ON m.staff_id = s.id JOIN staff_groups g ON g.id = m.group_id
+                                   WHERE s.business_id = $1 AND s.active AND g.key = 'fire_warden' AND s.email IS NOT NULL AND s.email <> ''`, [bid]);
   const to = new Set(wardens.map((w) => w.email));
   if (settings.notify.receptionMailbox) to.add(settings.notify.receptionMailbox.toLowerCase());
   const msg = rollCallEmail({ branding: settings.branding, rc, url: businessUrl(business, '/rollcall'), tz: settings.hours.timezone });

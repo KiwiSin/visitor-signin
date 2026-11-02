@@ -55,8 +55,8 @@ export default function RollCalls() {
       <section className="a-card">
         <h2>How wardens get the roll call</h2>
         <ol className="steps-list">
-          <li>In <Link to="/admin/staff">Staff &amp; teams</Link>, edit each fire warden and click <strong>Roll call link</strong>. Email it to them or copy it.</li>
-          <li>They open the link on their phone and add it to the home screen.</li>
+          <li>In <Link to="/admin/staff">Staff &amp; teams</Link>, add each fire warden to the <strong>Fire warden</strong> group and send them their phone sign-in link.</li>
+          <li>They open the link on their phone and add it to the home screen. Their staff app then shows an <strong>Emergency roll call</strong> button.</li>
           <li>It keeps a copy of who is on site, so it works at the assembly point without Wi-Fi. Wardens should open it as they leave the building.</li>
           <li>A roll call can also be started from the reception iPad (Staff in / out › Emergency roll call) or from here.</li>
         </ol>

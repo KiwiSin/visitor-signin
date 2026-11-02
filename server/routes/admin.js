@@ -1,3 +1,4 @@
+import { setStaffGroups } from './phone.js';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import crypto from 'node:crypto';
@@ -175,7 +176,9 @@ export default async function adminRoutes(app) {
 
     a.get('/api/admin/staff', async (request) => many(
       `SELECT s.id, s.name, s.email, s.mobile, s.team_id, t.name AS team, s.role, s.show_on_kiosk, s.presence, s.presence_at, s.source,
-              s.rollcall_key_hash IS NOT NULL AS has_rollcall_link, s.rollcall_key_created_at
+              s.phone_key_hash IS NOT NULL AS phone_linked, s.phone_linked_at, s.phone_device, s.phone_last_used_at,
+              (s.phone_invite_hash IS NOT NULL AND s.phone_invite_expires > now()) AS phone_invited, s.phone_invite_expires,
+              coalesce((SELECT array_agg(m.group_id ORDER BY m.group_id) FROM staff_group_members m WHERE m.staff_id = s.id), '{}') AS group_ids
          FROM staff s LEFT JOIN teams t ON t.id = s.team_id WHERE s.business_id = $1 AND s.active ORDER BY s.name`,
       [request.business.id],
     ));
@@ -186,6 +189,7 @@ export default async function adminRoutes(app) {
       mobile: str(b.mobile, 40),
       teamId: b.teamId ? Number(b.teamId) : null,   // checked against the business below
       role: b.role === 'warden' ? 'warden' : 'staff',
+      groupIds: Array.isArray(b.groupIds) ? b.groupIds : null,
       showOnKiosk: b.showOnKiosk === undefined ? true : bool(b.showOnKiosk),
     });
 
@@ -199,6 +203,7 @@ export default async function adminRoutes(app) {
            VALUES ($7, $1, nullif($2,''), nullif($3,''), (SELECT id FROM teams WHERE id = $4 AND business_id = $7), $5, $6) RETURNING id`,
           [s.name, s.email, s.mobile, s.teamId, s.role, s.showOnKiosk, request.business.id],
         );
+        await tx((c) => setStaffGroups(c, row.id, request.business.id, s.groupIds ?? [], s.groupIds ? [] : (s.role === 'warden' ? ['fire_warden'] : [])));
         await audit(request.user.id, 'staff.add', { id: row.id, name: s.name }, request.business.id);
         return row;
       } catch (e) {
@@ -214,9 +219,10 @@ export default async function adminRoutes(app) {
       try {
         await query(
           `UPDATE staff SET name=$2, email=nullif($3,''), mobile=nullif($4,''), team_id=(SELECT id FROM teams WHERE id = $5 AND business_id = $8),
-                  role=$6, show_on_kiosk=$7, updated_at=now() WHERE id=$1 AND business_id=$8`,
-          [Number(request.params.id), s.name, s.email, s.mobile, s.teamId, s.role, s.showOnKiosk, request.business.id],
+                  show_on_kiosk=$6, updated_at=now() WHERE id=$1 AND business_id=$7`,
+          [Number(request.params.id), s.name, s.email, s.mobile, s.teamId, s.showOnKiosk, request.business.id],
         );
+        if (s.groupIds) await tx((c) => setStaffGroups(c, Number(request.params.id), request.business.id, s.groupIds));
         await audit(request.user.id, 'staff.edit', { id: Number(request.params.id) }, request.business.id);
         return { ok: true };
       } catch (e) {
@@ -242,7 +248,8 @@ export default async function adminRoutes(app) {
 
     a.delete('/api/admin/staff/:id', async (request) => {
       // Keep the row (past visits still show the host) but hide it everywhere.
-      await query(`UPDATE staff SET active=false, email=NULL, show_on_kiosk=false, rollcall_key_hash=NULL, updated_at=now() WHERE id=$1 AND business_id=$2`, [Number(request.params.id), request.business.id]);
+      await query(`UPDATE staff SET active=false, email=NULL, show_on_kiosk=false, rollcall_key_hash=NULL,
+                   phone_key_hash=NULL, phone_invite_hash=NULL, phone_invite_expires=NULL, updated_at=now() WHERE id=$1 AND business_id=$2`, [Number(request.params.id), request.business.id]);
       await audit(request.user.id, 'staff.remove', { id: Number(request.params.id) }, request.business.id);
       return { ok: true };
     });
@@ -271,22 +278,38 @@ export default async function adminRoutes(app) {
             }
             teamId = teamIds.get(teamName.toLowerCase());
           }
-          const role = /warden/i.test(r.role || '') ? 'warden' : 'staff';
+          // Groups: "groups" column, separated by ; or | (e.g. "Fire warden; First aider"). "role: warden" also works.
+          const groupNames = str(r.groups || r.group, 400).split(/[;|]/).map((g) => g.trim().toLowerCase()).filter(Boolean);
+          if (/warden/i.test(r.role || '')) groupNames.push('fire warden');
+          const role = groupNames.includes('fire warden') ? 'warden' : 'staff';
+          let staffId;
           const existing = email
             ? (await c.query('SELECT id FROM staff WHERE business_id = $2 AND lower(email) = $1', [email, B])).rows[0]
             : (await c.query('SELECT id FROM staff WHERE business_id = $2 AND lower(name) = lower($1) AND active', [name, B])).rows[0];
           if (existing) {
             await c.query(
-              `UPDATE staff SET name=$2, email=coalesce(nullif($3,''), email), mobile=coalesce(nullif($4,''), mobile), team_id=coalesce($5, team_id), role=$6, active=true, updated_at=now() WHERE id=$1`,
-              [existing.id, name, email, str(r.mobile || r.phone, 40), teamId, role],
+              `UPDATE staff SET name=$2, email=coalesce(nullif($3,''), email), mobile=coalesce(nullif($4,''), mobile), team_id=coalesce($5, team_id), active=true, updated_at=now() WHERE id=$1`,
+              [existing.id, name, email, str(r.mobile || r.phone, 40), teamId],
             );
+            staffId = existing.id;
             result.updated++;
           } else {
-            await c.query(
-              `INSERT INTO staff (business_id, name, email, mobile, team_id, role, source) VALUES ($6, $1, nullif($2,''), nullif($3,''), $4, $5, 'csv')`,
+            staffId = (await c.query(
+              `INSERT INTO staff (business_id, name, email, mobile, team_id, role, source) VALUES ($6, $1, nullif($2,''), nullif($3,''), $4, $5, 'csv') RETURNING id`,
               [name, email, str(r.mobile || r.phone, 40), teamId, role, B],
-            );
+            )).rows[0].id;
             result.added++;
+          }
+          if (groupNames.length) {
+            // Add to the named groups (existing ones only; unknown names are reported).
+            await c.query(
+              `INSERT INTO staff_group_members (staff_id, group_id) SELECT $1, id FROM staff_groups WHERE business_id = $2 AND lower(name) = ANY($3::text[])
+               ON CONFLICT DO NOTHING`, [staffId, B, groupNames]);
+            const known = (await c.query('SELECT lower(name) AS n FROM staff_groups WHERE business_id = $1', [B])).rows.map((g) => g.n);
+            const unknown = [...new Set(groupNames.filter((g) => !known.includes(g)))];
+            if (unknown.length) result.skipped.push(`Row ${i + 2}: no group called "${unknown.join('", "')}" (add it in Staff › Groups first)`);
+            await c.query(`UPDATE staff SET role = 'warden' WHERE id = $1 AND EXISTS (SELECT 1 FROM staff_group_members m JOIN staff_groups g ON g.id = m.group_id
+                             WHERE m.staff_id = $1 AND g.key = 'fire_warden')`, [staffId]);
           }
         }
       });
@@ -467,6 +490,22 @@ export default async function adminRoutes(app) {
             staff: bool(a2.staff),
             emailReception: bool(a2.emailReception),
           },
+        };
+      } else if (section === 'phone') {
+        const lat = b.lat === null || b.lat === '' ? null : Number(b.lat);
+        const lng = b.lng === null || b.lng === '' ? null : Number(b.lng);
+        if ((lat === null) !== (lng === null)) return bad(reply, 'Set both latitude and longitude, or neither.');
+        if (lat !== null && (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180)) return bad(reply, 'That location isn’t valid.');
+        if (bool(b.locationCheck) && lat === null) return bad(reply, 'Put the pin on your site first, or turn off the location check.');
+        next = {
+          enabled: bool(b.enabled),
+          locationCheck: bool(b.locationCheck),
+          lat: lat === null ? null : Math.round(lat * 1e6) / 1e6,
+          lng: lng === null ? null : Math.round(lng * 1e6) / 1e6,
+          address: str(b.address, 200),
+          radius: Math.min(5000, Math.max(50, Math.round(Number(b.radius) || 200))),
+          signOutAnywhere: bool(b.signOutAnywhere),
+          noLocation: b.noLocation === 'allow' ? 'allow' : 'block',
         };
       } else if (section === 'privacy') {
         next = {

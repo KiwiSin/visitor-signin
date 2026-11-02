@@ -40,14 +40,22 @@ export default async function authRoutes(app) {
     return { ...publicBranding((await getSettings(b.id)).branding), businessSlug: b.slug, businessStatus: b.status };
   });
 
-  // Home-screen app details, so "Add to Home Screen" opens this business's kiosk or roll call.
+  // Home-screen app details, so "Add to Home Screen" opens this business's kiosk, staff app or roll call.
   app.get('/api/public/manifest/:app', async (request, reply) => {
     const b = await resolveBusiness(request);
-    const kind = request.params.app === 'rollcall' ? 'rollcall' : 'kiosk';
+    const kind = ['rollcall', 'me'].includes(request.params.app) ? request.params.app : 'kiosk';
     const branding = b ? (await getSettings(b.id)).branding : null;
     const base = b && request.headers['x-vs-business'] ? `/b/${b.slug}` : '';
     const name = branding?.companyName || 'Visitor Sign-In';
-    const manifest = kind === 'rollcall'
+    // An unused phone link can ride along, so the home-screen app (separate storage on iPhone) claims it itself.
+    const invite = /^[A-Za-z0-9_-]{10,100}$/.test(request.query?.invite || '') ? `#invite=${request.query.invite}` : '';
+    const manifest = kind === 'me'
+      ? {
+        id: `${base}/me`, name: `${name} sign-in`, short_name: 'Sign in', start_url: `${base}/me${invite}`, scope: '/',
+        display: 'standalone', orientation: 'portrait', background_color: '#F5F6F8', theme_color: branding?.accent || '#0F766E',
+        icons: [{ src: '/icons/icon-192.png', sizes: '192x192', type: 'image/png' }, { src: '/icons/icon-512.png', sizes: '512x512', type: 'image/png' }, { src: '/icons/maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' }],
+      }
+      : kind === 'rollcall'
       ? {
         id: `${base}/rollcall`, name: `Roll call · ${name}`, short_name: 'Roll call', start_url: `${base}/rollcall`, scope: '/',
         display: 'standalone', orientation: 'portrait', background_color: '#F5F6F8', theme_color: '#B91C1C',

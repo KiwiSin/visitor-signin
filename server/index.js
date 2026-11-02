@@ -11,6 +11,7 @@ import authRoutes, { prepareSetup } from './routes/auth.js';
 import kioskRoutes from './routes/kiosk.js';
 import rollCallRoutes from './routes/rollcall.js';
 import hostRoutes from './routes/host.js';
+import phoneRoutes from './routes/phone.js';
 import { startWorker } from './worker.js';
 
 export async function buildApp({ logger = true } = {}) {
@@ -51,6 +52,7 @@ export async function buildApp({ logger = true } = {}) {
   await app.register(adminRoutes);
   await app.register(rollCallRoutes);
   await app.register(hostRoutes);
+  await app.register(phoneRoutes);
 
   // Uploaded logos and wallpapers (signatures live in a private folder and are never served here).
   const publicUploads = path.join(config.uploadDir, 'public');

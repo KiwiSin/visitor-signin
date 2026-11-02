@@ -1,12 +1,14 @@
-import { useCallback, useEffect, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { api, fmtDateTime } from '../api.js';
 import { Toggle, useFlash } from './AdminApp.jsx';
+const PhoneSettings = lazy(() => import('./PhoneSettings.jsx')); // brings in the map library only when needed
 import { colorsOf, contrast, isDark, logoFor, PRESETS, readableOn } from '../theme.js';
 
 const TABS = [
   ['branding', 'Branding'],
   ['hours', 'Business hours'],
+  ['phone', 'Staff phone app'],
   ['email', 'Email & alerts'],
   ['safety', 'Health & Safety'],
   ['types', 'Visit types'],
@@ -49,6 +51,7 @@ export default function Settings({ onBrandingChange, user }) {
         <>
           {tab === 'branding' && <Branding settings={settings} save={save} setFlash={setFlash} />}
           {tab === 'hours' && <Hours settings={settings} save={save} />}
+          {tab === 'phone' && <Suspense fallback={<p>Loading…</p>}><PhoneSettings settings={settings} save={save} setFlash={setFlash} /></Suspense>}
           {tab === 'email' && <Email settings={settings} save={save} setFlash={setFlash} />}
           {tab === 'safety' && <Safety settings={settings} save={save} setFlash={setFlash} />}
           {tab === 'types' && <Types setFlash={setFlash} />}

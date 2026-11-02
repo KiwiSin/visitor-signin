@@ -13,7 +13,7 @@ export default async function rollCallRoutes(app) {
   app.register(async (r) => {
     r.addHook('preHandler', async (request, reply) => {
       const actor = await rollCallActor(request);
-      if (!actor) return reply.code(401).send({ error: 'Open the roll call from your warden link, or sign in to Admin.', code: 'no-access' });
+      if (!actor) return reply.code(401).send({ error: 'Only fire wardens can open the roll call. Open it from your staff phone app, or sign in to Admin.', code: 'no-access' });
       request.actor = actor;
     });
 
@@ -22,42 +22,9 @@ export default async function rollCallRoutes(app) {
     r.post('/api/rollcall/sync', async (request) => syncRollCall(request.body || {}, request.actor));
   });
 
-  // ---- Admin: warden links and reports ----
+  // ---- Admin: reports ----
   app.register(async (a) => {
     a.addHook('preHandler', requireAdmin);
-
-    a.post('/api/admin/staff/:id/rollcall-link', async (request, reply) => {
-      const B = request.business.id;
-      const s = await one('SELECT id, name, email FROM staff WHERE id = $1 AND business_id = $2 AND active', [Number(request.params.id), B]);
-      if (!s) return reply.code(404).send({ error: 'Staff member not found.' });
-      const key = randomToken(24);
-      await query(`UPDATE staff SET rollcall_key_hash = $2, rollcall_key_created_at = now(), role = 'warden' WHERE id = $1`, [s.id, sha256(key)]);
-      const url = `${businessUrl(request.business, '/rollcall')}#key=${key}`;
-      await audit(request.user.id, 'rollcall.link', { staff: s.id }, B);
-      let emailed = false;
-      if (request.body?.email) {
-        if (!s.email) return reply.code(400).send({ error: `${s.name} has no email address. Copy the link instead.` });
-        const { email, branding } = await getSettings(B);
-        try {
-          await sendMail(email, {
-            to: s.email,
-            subject: `Your roll call link for ${branding.companyName}`,
-            html: `<p>Kia ora ${esc(s.name.split(' ')[0])},</p><p>You are set up as a fire warden. Open this link <strong>on your phone</strong>, then add it to your home screen (Share › Add to Home Screen on iPhone; ⋮ › Add to Home screen on Android):</p><p><a href="${esc(url)}">${esc(url)}</a></p><p>Open it once a week or so, and as you leave the building in an evacuation, so it has the latest list of who is on site. It keeps working without Wi-Fi.</p><p>Keep this link to yourself. It is your personal access.</p>`,
-            text: `You are set up as a fire warden. Open this link on your phone and add it to your home screen:\n${url}\n\nOpen it as you leave the building in an evacuation so it has the latest list. Keep this link to yourself.`,
-          });
-          emailed = true;
-        } catch (err) {
-          return reply.code(400).send({ error: `The link was made but the email failed: ${err.message}`, url });
-        }
-      }
-      return { url, emailed };
-    });
-
-    a.delete('/api/admin/staff/:id/rollcall-link', async (request) => {
-      await query('UPDATE staff SET rollcall_key_hash = NULL, rollcall_key_created_at = NULL WHERE id = $1 AND business_id = $2', [Number(request.params.id), request.business.id]);
-      await audit(request.user.id, 'rollcall.revoke', { staff: Number(request.params.id) }, request.business.id);
-      return { ok: true };
-    });
 
     a.get('/api/admin/rollcalls', async (request) => many(
       `SELECT r.id, r.started_at, r.started_by, r.ended_at, r.ended_by,

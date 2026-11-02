@@ -93,9 +93,18 @@ ok(bDash.onsite.length === 1 && !aDash.onsite.some((v) => v.name === 'Vera Visit
 
 console.log('Roll call per business');
 await beta('/api/b/beta-co/admin/staff/' + bob.id, { method: 'PATCH', body: { presence: 'in' } });
-const link = await beta(`/api/b/beta-co/admin/staff/${bob.id}/rollcall-link`, { method: 'POST', body: {} });
-ok(link.url.includes('/b/beta-co/rollcall#key='), 'warden link points at Beta');
-const wh = { 'X-Warden-Token': link.url.split('#key=')[1] };
+const bGroups = await beta('/api/b/beta-co/admin/groups');
+ok(bGroups.map((g) => g.key).join() === 'fire_warden,first_aider,management', 'new business gets the three built-in groups');
+await beta(`/api/b/beta-co/admin/staff/${bob.id}/groups`, { method: 'PUT', body: { groupIds: [bGroups[0].id] } });
+const link = await beta(`/api/b/beta-co/admin/staff/${bob.id}/phone-link`, { method: 'POST', body: { send: false } });
+ok(link.url.includes('/b/beta-co/me#invite='), 'phone link points at Beta');
+const claimed = await client()('/api/me/claim', { method: 'POST', body: { invite: link.url.split('#invite=')[1] } });
+ok(claimed.businessSlug === 'beta-co', 'claimed phone knows its business');
+const wh = { 'X-Staff-Token': claimed.token };
+const aGroups = await host(`/api/b/${acme}/admin/groups`);
+await beta(`/api/b/beta-co/admin/staff/${bob.id}/groups`, { method: 'PUT', body: { groupIds: [bGroups[0].id, ...aGroups.map((g) => g.id)] } });
+const bobNow = (await beta('/api/b/beta-co/admin/staff')).find((s) => s.id === bob.id);
+ok(bobNow.group_ids.length === 1, 'groups from another business are ignored');
 const st = await client()('/api/rollcall/state', { headers: wh });
 ok(st.people.length === 2 && st.people.every((p) => ['Vera Visitor', 'Bob Beta'].includes(p.name)), 'Beta warden sees only Beta people');
 

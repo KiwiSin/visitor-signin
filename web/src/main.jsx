@@ -10,6 +10,7 @@ import './styles.css';
 import Kiosk from './kiosk/Kiosk.jsx';
 import AdminApp from './admin/AdminApp.jsx';
 import RollCallPage from './rollcall/RollCallPage.jsx';
+import StaffApp from './staff/StaffApp.jsx';
 import HostApp from './host/HostApp.jsx';
 import BusinessSetup from './setup/BusinessSetup.jsx';
 import { basename, slug } from './tenant.js';
@@ -23,6 +24,7 @@ createRoot(document.getElementById('root')).render(
     <Routes>
       <Route path="/kiosk/*" element={<Kiosk />} />
       <Route path="/admin/*" element={<AdminApp />} />
+      <Route path="/me" element={<StaffApp />} />
       <Route path="/rollcall" element={<RollCallPage />} />
       <Route path="/setup" element={<BusinessSetup />} />
       {!slug && <Route path="/host/*" element={<HostApp />} />}

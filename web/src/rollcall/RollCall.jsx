@@ -17,7 +17,7 @@ const IconPhone = () => (
  * Emergency roll call. Works offline: the list of who is on site is kept on the device,
  * ticks are saved locally and sent to the server whenever there is a connection.
  *
- * headers: extra request headers (warden key or kiosk token)
+ * headers: extra request headers (staff phone token or kiosk token)
  * storageKey: separates the saved copy per kind of device
  * onExit: show a "Close" button (used on the reception tablet)
  */
@@ -192,7 +192,7 @@ export default function RollCall({ headers = {}, storageKey = 'vs_rc', onExit })
         <div className="rc-body" style={{ justifyContent: 'center' }}>
           <img src="/logo.svg" alt="Visitor Sign-In" style={{ height: 40, alignSelf: 'flex-start' }} />
           <h1 style={{ fontSize: 24 }}>Roll call</h1>
-          <p>Open this page from your personal warden link (ask your admin to send it from Admin › Staff), or <a href={appPath('/admin')}>sign in to Admin</a> first.</p>
+          <p>The roll call is for fire wardens. Open it from the <a href={appPath('/me')}>staff sign-in app</a> on your phone (your admin adds you to the Fire warden group), or <a href={appPath('/admin')}>sign in to Admin</a> first.</p>
         </div>
       </div>
     );

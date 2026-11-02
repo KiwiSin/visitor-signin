@@ -10,7 +10,8 @@ Self-hosted visitor sign-in for reception. Visitors sign in on an iPad, agree to
 - **Sign-in flow:** visit type (Visitor, Contractor, Courier, Interview), details, choose a host, Health & Safety rules, safety questions, finger signature.
 - **Alerts:** email to the host (or their team's shared mailbox), a copy to the reception mailbox, and a separate alert to your Health & Safety contact when a safety answer is flagged. Failed emails retry for 24 hours.
 - **Admin portal:** dashboard of who's on site, visitor log with CSV export and signatures, staff and teams (manual or CSV import), tablet pairing, branding, email settings, H&S text and questions, visit types, admin users.
-- **Emergency roll call:** wardens open a personal link on their phone (added to the home screen). Start a roll call from a phone, the reception iPad or Admin; everyone signed in appears, wardens tick people safe, call missing people with one tap, and add anyone not on the list. Several wardens can tick at once. It keeps working with no Wi-Fi and syncs when back online. Wardens and reception are emailed the list when it starts. Reports are kept 7 years with CSV export.
+- **Staff phone app:** each person gets a personal link by email, adds it to their home screen, and signs in or out with one tap. Signing in checks the phone is near the site (location is never stored). Staff groups (Fire warden, First aider, Management, your own).
+- **Emergency roll call:** people in the Fire warden group open it from their staff phone app. Start a roll call from a phone, the reception iPad or Admin; everyone signed in appears, wardens tick people safe, call missing people with one tap, and add anyone not on the list. Several wardens can tick at once. It keeps working with no Wi-Fi and syncs when back online. Wardens and reception are emailed the list when it starts. Reports are kept 7 years with CSV export.
 - **Many businesses on one install:** a Host console (`/host`) to create businesses from their name, send each a one-time setup link, pause or delete them. Each business gets everything above, completely separate, at `/b/<web-address>/`. See [docs/hosting.md](docs/hosting.md).
 - **Business hours and automatic sign-out:** opening hours and time zone per business; anyone still signed in is signed out at a set time (default 11:00 pm) or after closing time, with an optional daily list to reception.
 - **Works offline:** if the network drops, the iPad keeps signing people in and sends them when it reconnects.
@@ -41,11 +42,11 @@ You need a Docker host with Portainer, and a web address with HTTPS for the iPad
 Then in Admin:
 
 1. **Settings › Email & alerts:** choose *SMTP relay (no login)*, enter your mail server and port 25, the *Send from* address and the reception mailbox. Send a test.
-2. **Staff & teams:** add people, or import a CSV (`name, email, team, mobile, role`).
+2. **Staff & teams:** add people, or import a CSV (`name, email, team, mobile, groups`).
 3. **Settings › Branding:** logo, colour, wallpapers, assembly point.
 4. **Settings › Health & Safety:** paste your rules and safety questions.
 5. **Tablets:** add each iPad and pair it (steps below).
-6. **Staff & teams › fire wardens › Send roll call link:** each warden opens it on their phone and adds it to the home screen. Run a drill from Admin › Roll calls.
+6. **Settings › Staff phone app:** put the pin on your site, then **Email links** to staff. Each person signs in or out from their phone with one tap (location-checked). Put wardens in the **Fire warden** group: their phone app then has the emergency roll call. Run a drill from Admin › Roll calls.
 
 Full guide: [docs/install.md](docs/install.md). Hosting other businesses: [docs/hosting.md](docs/hosting.md). IT checklist for the mail relay: [docs/email-relay.md](docs/email-relay.md).
 

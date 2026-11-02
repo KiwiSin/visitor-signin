@@ -5,10 +5,14 @@ const j=async(p,o={})=>{const r=await fetch(B+p,{method:o.method||'GET',headers:
 const ok=(c,m)=>{if(!c)throw new Error('FAIL '+m);console.log('  ✓',m)};
 await j('/api/auth/login',{method:'POST',body:{email:'admin@acme.co.nz',password:'correct-horse-battery'}});
 const staff=await j('/api/admin/staff'); const jane=staff.find(s=>s.name==='Jane Wilson');
-const link=await j(`/api/admin/staff/${jane.id}/rollcall-link`,{method:'POST',body:{}});
-const key=link.url.split('#key=')[1]; ok(key&&link.url.includes('/rollcall#key='),'warden link made');
+const groups=await j('/api/admin/groups'); const fw=groups.find(g=>g.key==='fire_warden');
+ok(jane.group_ids.includes(fw.id),'Jane is in the Fire warden group (from the CSV role)');
+const link=await j(`/api/admin/staff/${jane.id}/phone-link`,{method:'POST',body:{send:false}});
+const invite=link.url.split('#invite=')[1]; ok(invite&&link.url.includes('/me#invite='),'staff phone link made');
 const admCookie=cookie; cookie='';
-const W={'X-Warden-Token':key};
+const claim=await j('/api/me/claim',{method:'POST',body:{invite},h:{}});
+const W={'X-Staff-Token':claim.token};
+ok((await j('/api/me',{h:W})).isWarden===true,'phone app knows Jane is a fire warden');
 let r=await fetch(B+'/api/rollcall/state'); ok(r.status===401,'no access without link');
 const st=await j('/api/rollcall/state',{h:W}); ok(st.me.name==='Jane Wilson'&&st.people.length>=2,`warden sees ${st.people.length} people on site, no active roll call: ${st.active===null}`);
 // Device A (offline) started at T, marked someone; device B starts online slightly later
@@ -30,6 +34,10 @@ const st3=await j('/api/rollcall/state'); ok(!st3.active&&st3.lastEnded.id===B1.
 const list=await j('/api/admin/rollcalls'); ok(list[0].safe===3&&list[0].total===st.people.length+1,`report: ${list[0].safe} safe of ${list[0].total}`);
 const csv=await j(`/api/admin/rollcalls/${B1.id}/csv`); ok(csv.includes('NOT ACCOUNTED FOR')||csv.includes('Safe'),'CSV report');
 const n=await j('/api/admin/notifications'); ok(n.some(x=>x.kind==='rollcall'),'roll call email queued to wardens/reception');
-await j(`/api/admin/staff/${jane.id}/rollcall-link`,{method:'DELETE'}); cookie='';
-r=await fetch(B+'/api/rollcall/state',{headers:W}); ok(r.status===401,'revoked link stops working');
+await j(`/api/admin/staff/${jane.id}/groups`,{method:'PUT',body:{groupIds:[]}}); 
+r=await fetch(B+'/api/rollcall/state',{headers:W}); ok(r.status===401,'taken out of Fire warden group: no roll call access');
+r=await fetch(B+'/api/me',{headers:W}); ok(r.status===200,'…but phone sign-in still works');
+await j(`/api/admin/staff/${jane.id}/groups`,{method:'PUT',body:{groupIds:[fw.id]}});
+await j(`/api/admin/staff/${jane.id}/phone`,{method:'DELETE'}); cookie='';
+r=await fetch(B+'/api/rollcall/state',{headers:W}); ok(r.status===401,'removed phone stops working');
 console.log('roll call API OK');

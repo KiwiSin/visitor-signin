@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { api, fmtTime } from '../api.js';
+import { api, fmtDateTime, fmtTime } from '../api.js';
 import { Modal, Toggle, useFlash } from './AdminApp.jsx';
 
-const blank = { name: '', email: '', mobile: '', teamId: '', role: 'staff', showOnKiosk: true };
+const blank = { name: '', email: '', mobile: '', teamId: '', groupIds: [], showOnKiosk: true };
 
 export default function Staff() {
   const [staff, setStaff] = useState(null);
@@ -11,15 +11,17 @@ export default function Staff() {
   const [q, setQ] = useState('');
   const [edit, setEdit] = useState(null);
   const [teamEdit, setTeamEdit] = useState(null);
-  const [linkFor, setLinkFor] = useState(null);
+  const [groups, setGroups] = useState([]);
+  const [groupEdit, setGroupEdit] = useState(null);
   const [flash, setFlash] = useFlash();
   const fileRef = useRef(null);
 
   const load = useCallback(async () => {
     try {
-      const [s, t] = await Promise.all([api('/api/admin/staff'), api('/api/admin/teams')]);
+      const [s, t, g] = await Promise.all([api('/api/admin/staff'), api('/api/admin/teams'), api('/api/admin/groups')]);
       setStaff(s);
       setTeams(t);
+      setGroups(g);
     } catch (e) {
       setFlash(e.message, 'bad');
     }
@@ -95,7 +97,35 @@ export default function Staff() {
     load();
   };
 
-  const list = (staff || []).filter((s) => (team === 'all' || (team === 'in' ? s.presence === 'in' : String(s.team_id) === String(team)))
+  const saveGroup = async (e) => {
+    e.preventDefault();
+    try {
+      const g = groupEdit.id
+        ? await api(`/api/admin/groups/${groupEdit.id}`, { method: 'PUT', body: groupEdit })
+        : await api('/api/admin/groups', { method: 'POST', body: groupEdit });
+      // A group made from the staff form is ticked straight away.
+      if (!groupEdit.id && groupEdit.forEdit && edit) setEdit((x) => ({ ...x, groupIds: [...x.groupIds, g.id] }));
+      setGroupEdit(null);
+      load();
+    } catch (err) {
+      setGroupEdit({ ...groupEdit, error: err.message });
+    }
+  };
+  const removeGroup = async (g) => {
+    if (!window.confirm(`Delete the group "${g.name}"? People stay; they just leave the group.`)) return;
+    try {
+      await api(`/api/admin/groups/${g.id}`, { method: 'DELETE' });
+      setGroupEdit(null);
+      if (team === `g${g.id}`) setTeam('all');
+      load();
+    } catch (err) {
+      setGroupEdit({ ...groupEdit, error: err.message });
+    }
+  };
+  const groupById = Object.fromEntries(groups.map((g) => [g.id, g]));
+
+  const list = (staff || []).filter((s) => (team === 'all' || (team === 'in' ? s.presence === 'in'
+    : String(team).startsWith('g') ? s.group_ids.includes(Number(String(team).slice(1))) : String(s.team_id) === String(team)))
     && (!q || `${s.name} ${s.email || ''} ${s.team || ''}`.toLowerCase().includes(q.toLowerCase())));
 
   return (
@@ -104,7 +134,7 @@ export default function Staff() {
         <div><h1>Staff &amp; teams</h1><p>Everyone visitors can choose as a host. {staff ? `${staff.length} staff · ${teams.length} teams` : ''}</p></div>
         <div className="a-actions">
           <input ref={fileRef} type="file" accept=".csv,text/csv" hidden onChange={(e) => importCsv(e.target.files[0])} />
-          <a className="a-btn" href={`data:text/csv;charset=utf-8,${encodeURIComponent('name,email,team,mobile,role\nJane Wilson,jane.wilson@company.co.nz,Operations,021 123 4567,warden\n')}`} download="staff-template.csv">CSV template</a>
+          <a className="a-btn" href={`data:text/csv;charset=utf-8,${encodeURIComponent('name,email,team,mobile,groups\nJane Wilson,jane.wilson@company.co.nz,Operations,021 123 4567,Fire warden; First aider\n')}`} download="staff-template.csv">CSV template</a>
           <button type="button" className="a-btn" onClick={() => fileRef.current.click()}>Import CSV</button>
           <button type="button" className="a-btn primary" onClick={() => setEdit({ ...blank })}>+ Add staff member</button>
         </div>
@@ -133,19 +163,36 @@ export default function Staff() {
             ))}
           </div>
           <p className="sub">A team can have a shared mailbox. Visitors who choose someone with no email of their own alert the team mailbox instead.</p>
+          <div className="a-row" style={{ justifyContent: 'space-between', marginTop: 8 }}>
+            <h2 style={{ fontSize: 16, fontWeight: 700 }}>Groups</h2>
+            <button type="button" className="a-btn sm" onClick={() => setGroupEdit({ name: '', color: '#1D4ED8' })}>+ Group</button>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            {groups.map((g) => (
+              <div key={g.id} className="a-row" style={{ gap: 4, flexWrap: 'nowrap' }}>
+                <button type="button" className={`a-btn ${team === `g${g.id}` ? 'primary' : ''}`} style={{ flex: 1, justifyContent: 'space-between', border: 'none' }} onClick={() => setTeam(`g${g.id}`)}>
+                  <span className="a-row" style={{ gap: 8, flexWrap: 'nowrap' }}><span className="a-gdot" style={{ background: g.color }} />{g.name}</span><span>{g.members}</span>
+                </button>
+                <button type="button" className="a-btn sm" aria-label={`Edit group ${g.name}`} onClick={() => setGroupEdit(g)}>Edit</button>
+              </div>
+            ))}
+          </div>
+          <p className="sub">People can be in several groups. <strong>Fire warden</strong> gives the Emergency roll call button in their phone app.</p>
         </section>
         <section className="a-card main">
           <input className="a-input" type="search" aria-label="Search staff" placeholder="Search name, email or team…" value={q} onChange={(e) => setQ(e.target.value)} style={{ maxWidth: 360 }} />
           <div className="a-table-wrap">
             <table className="a-table">
-              <thead><tr><th>Name</th><th>Team</th><th>Role</th><th>Status</th><th>Show on tablet</th><th className="r"><span className="sr-only">Edit</span></th></tr></thead>
+              <thead><tr><th>Name</th><th>Team</th><th>Groups</th><th>Status</th><th>Show on tablet</th><th className="r"><span className="sr-only">Edit</span></th></tr></thead>
               <tbody>
                 {list.map((s) => (
                   <tr key={s.id}>
                     <td><strong>{s.name}</strong><div className="muted">{s.email || 'No email: alerts go to their team or reception'}</div></td>
                     <td>{s.team || <span className="muted">—</span>}</td>
-                    <td>{s.role === 'warden' ? <span className="badge warn">Fire warden</span> : 'Staff'}
-                      {s.role === 'warden' && <div style={{ marginTop: 6 }}><button type="button" className="a-btn sm" onClick={() => setLinkFor({ ...s })}>{s.has_rollcall_link ? 'Roll call link ✓' : 'Send roll call link'}</button></div>}</td>
+                    <td>
+                      <div className="a-chips">{s.group_ids.map((id) => groupById[id] && <span key={id} className="a-chip" style={{ background: groupById[id].color }}>{groupById[id].name}</span>)}</div>
+                      <div className="muted" style={{ marginTop: s.group_ids.length ? 4 : 0 }}>{s.phone_linked ? `Phone ✓ ${s.phone_device || ''}` : s.phone_invited ? 'Phone link sent' : ''}</div>
+                    </td>
                     <td>
                       <div className="a-row" style={{ gap: 6, flexWrap: 'nowrap' }}>
                         {s.presence === 'in' ? <span className="badge ok">In</span> : <span className="badge">Out</span>}
@@ -154,12 +201,12 @@ export default function Staff() {
                       {s.presence === 'in' && s.presence_at && <div className="muted">since {fmtTime(s.presence_at)}</div>}
                     </td>
                     <td><Toggle on={s.show_on_kiosk} label={`Show ${s.name} on tablet`} onChange={(on) => setKiosk(s, on)} /></td>
-                    <td className="r"><button type="button" className="a-btn sm" onClick={() => setEdit({ id: s.id, name: s.name, email: s.email || '', mobile: s.mobile || '', teamId: s.team_id || '', role: s.role, showOnKiosk: s.show_on_kiosk })}>Edit</button></td>
+                    <td className="r"><button type="button" className="a-btn sm" onClick={() => setEdit({ id: s.id, name: s.name, email: s.email || '', mobile: s.mobile || '', teamId: s.team_id || '', groupIds: s.group_ids, showOnKiosk: s.show_on_kiosk })}>Edit</button></td>
                   </tr>
                 ))}
               </tbody>
             </table>
-            {staff && !list.length && <div className="a-empty">{staff.length ? 'No one matches.' : 'No staff yet. Add people one by one, or import a CSV with the columns name, email, team, mobile.'}</div>}
+            {staff && !list.length && <div className="a-empty">{staff.length ? 'No one matches.' : 'No staff yet. Add people one by one, or import a CSV with the columns name, email, team, mobile, groups.'}</div>}
           </div>
         </section>
       </div>
@@ -178,13 +225,24 @@ export default function Staff() {
                 </select>
               </label>
             </div>
-            <label className="a-field">Role
-              <select className="a-select" value={edit.role} onChange={(e) => setEdit({ ...edit, role: e.target.value })}>
-                <option value="staff">Staff</option>
-                <option value="warden">Fire warden</option>
-              </select>
-            </label>
+            <div className="a-field">
+              <span>Groups <span className="hint">Tap to add or remove</span></span>
+              <div className="a-chips">
+                {groups.map((g) => {
+                  const on = edit.groupIds.includes(g.id);
+                  return (
+                    <button key={g.id} type="button" className={`a-gchip ${on ? 'on' : ''}`} aria-pressed={on} style={on ? { background: g.color, borderColor: g.color } : undefined}
+                      onClick={() => setEdit({ ...edit, groupIds: on ? edit.groupIds.filter((x) => x !== g.id) : [...edit.groupIds, g.id] })}>
+                      {on ? '✓ ' : ''}{g.name}
+                    </button>
+                  );
+                })}
+                <button type="button" className="a-gchip new" onClick={() => setGroupEdit({ name: '', color: '#1D4ED8', forEdit: true })}>+ New group</button>
+              </div>
+              {groups.some((g) => g.key === 'fire_warden' && edit.groupIds.includes(g.id)) && <span className="hint">Fire warden: sees the Emergency roll call button in their phone app.</span>}
+            </div>
             <div className="a-toggle-row"><span>Show on the tablet as someone visitors can choose</span><Toggle on={edit.showOnKiosk} label="Show on tablet" onChange={(on) => setEdit({ ...edit, showOnKiosk: on })} /></div>
+            {edit.id && <PhoneSignIn staff={staff.find((x) => x.id === edit.id)} email={edit.email} onChange={load} />}
             {edit.error && <div className="a-msg bad">{edit.error}</div>}
             <div className="a-row" style={{ justifyContent: 'space-between' }}>
               {edit.id ? <button type="button" className="a-btn danger" onClick={() => remove(edit)}>Remove</button> : <span />}
@@ -193,7 +251,24 @@ export default function Staff() {
           </form>
         </Modal>
       )}
-      {linkFor && <RollCallLink staff={linkFor} onClose={() => { setLinkFor(null); load(); }} />}
+      {groupEdit && (
+        <Modal title={groupEdit.id ? `Edit ${groupEdit.name}` : 'New group'} onClose={() => setGroupEdit(null)}>
+          <form onSubmit={saveGroup} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <label className="a-field">Group name <span className="hint">e.g. Key holder, Forklift licence</span><input className="a-input" value={groupEdit.name} onChange={(e) => setGroupEdit({ ...groupEdit, name: e.target.value })} required maxLength={40} /></label>
+            <div className="a-field"><span>Colour</span>
+              <div className="a-chips">{['#B91C1C', '#C2410C', '#B45309', '#15803D', '#0F766E', '#1D4ED8', '#7C3AED', '#BE185D', '#374151'].map((c) => (
+                <button key={c} type="button" className={`a-swatch ${groupEdit.color === c ? 'on' : ''}`} style={{ background: c }} aria-label={c} aria-pressed={groupEdit.color === c} onClick={() => setGroupEdit({ ...groupEdit, color: c })} />
+              ))}</div>
+            </div>
+            {groupEdit.key === 'fire_warden' && <p className="sub">Built-in: people in this group can run the emergency roll call from their phone app. It can be renamed but not deleted.</p>}
+            {groupEdit.error && <div className="a-msg bad">{groupEdit.error}</div>}
+            <div className="a-row" style={{ justifyContent: 'space-between' }}>
+              {groupEdit.id && groupEdit.key !== 'fire_warden' ? <button type="button" className="a-btn danger" onClick={() => removeGroup(groupEdit)}>Delete group</button> : <span />}
+              <div className="a-row"><button type="button" className="a-btn" onClick={() => setGroupEdit(null)}>Cancel</button><button type="submit" className="a-btn primary">Save</button></div>
+            </div>
+          </form>
+        </Modal>
+      )}
       {teamEdit && (
         <Modal title={teamEdit.id ? `Edit ${teamEdit.name}` : 'Add team'} onClose={() => setTeamEdit(null)}>
           <form onSubmit={saveTeam} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -211,18 +286,21 @@ export default function Staff() {
   );
 }
 
-function RollCallLink({ staff, onClose }) {
-  const [url, setUrl] = useState('');
+/** The "Phone sign-in" block in the staff form: status, send a link, turn it off. */
+function PhoneSignIn({ staff, email, onChange }) {
   const [msg, setMsg] = useState(null);
+  const [url, setUrl] = useState('');
   const [busy, setBusy] = useState(false);
-  const make = async (email) => {
-    if (staff.has_rollcall_link && !url && !window.confirm(`Make a new link for ${staff.name}? Their current link will stop working.`)) return;
+  if (!staff) return null;
+  const send = async (viaEmail) => {
+    if (staff.phone_linked && !window.confirm(`Send ${staff.name} a new link? Their current phone will stop working once the new link is opened.`)) return;
     setBusy(true);
     setMsg(null);
     try {
-      const r = await api(`/api/admin/staff/${staff.id}/rollcall-link`, { method: 'POST', body: { email } });
-      setUrl(r.url);
-      setMsg(r.emailed ? { kind: 'ok', text: `Emailed to ${staff.email}.` } : { kind: 'ok', text: 'Link made. Copy it and send it to them.' });
+      const r = await api(`/api/admin/staff/${staff.id}/phone-link`, { method: 'POST', body: { send: viaEmail } });
+      setUrl(r.emailed ? '' : r.url);
+      setMsg({ kind: 'ok', text: r.emailed ? `Link emailed to ${staff.email}. It works on one phone and expires in 7 days.` : 'Link made. Copy it and send it to them. It works on one phone.' });
+      onChange();
     } catch (e) {
       setMsg({ kind: 'bad', text: e.message });
     } finally {
@@ -230,25 +308,39 @@ function RollCallLink({ staff, onClose }) {
     }
   };
   const revoke = async () => {
-    if (!window.confirm(`Turn off ${staff.name}'s roll call link?`)) return;
-    await api(`/api/admin/staff/${staff.id}/rollcall-link`, { method: 'DELETE' });
-    onClose();
+    if (!window.confirm(`Turn off phone sign-in for ${staff.name}?`)) return;
+    await api(`/api/admin/staff/${staff.id}/phone`, { method: 'DELETE' });
+    setMsg(null);
+    setUrl('');
+    onChange();
   };
   const copy = async () => {
     try { await navigator.clipboard.writeText(url); setMsg({ kind: 'ok', text: 'Copied.' }); } catch { setMsg({ kind: 'warn', text: 'Select the link and copy it.' }); }
   };
+  const when = (d) => (d ? fmtDateTime(d) : '');
+  const changedEmail = (email || '') !== (staff.email || '');
   return (
-    <Modal title={`Roll call link for ${staff.name}`} onClose={onClose}>
-      <p className="sub">A personal link that opens the emergency roll call on their phone. They add it to their home screen; it then works without Wi-Fi. {staff.has_rollcall_link && !url ? 'They already have a link. Making a new one turns the old one off.' : ''}</p>
-      {url && <input className="a-input" readOnly value={url} onFocus={(e) => e.target.select()} aria-label="Roll call link" />}
-      {msg && <div className={`a-msg ${msg.kind}`}>{msg.text}</div>}
-      <div className="a-row">
-        {staff.email && <button type="button" className="a-btn primary" disabled={busy} onClick={() => make(true)}>Email link to {staff.email}</button>}
-        {!url && <button type="button" className="a-btn" disabled={busy} onClick={() => make(false)}>Make link to copy</button>}
-        {url && <button type="button" className="a-btn" onClick={copy}>Copy link</button>}
-        {staff.has_rollcall_link && <button type="button" className="a-btn danger" onClick={revoke}>Turn off link</button>}
+    <div className="a-phone">
+      <div className="a-row" style={{ justifyContent: 'space-between' }}>
+        <strong>Phone sign-in</strong>
+        {staff.phone_linked ? <span className="badge ok">Active</span> : staff.phone_invited ? <span className="badge warn">Link sent</span> : <span className="badge">Not set up</span>}
       </div>
-      <div className="a-row" style={{ justifyContent: 'flex-end' }}><button type="button" className="a-btn" onClick={onClose}>Close</button></div>
-    </Modal>
+      <p className="sub" style={{ margin: 0 }}>
+        {staff.phone_linked
+          ? `Linked to ${/^[AEIOU]/i.test(staff.phone_device || '') ? 'an' : 'a'} ${staff.phone_device || 'phone'} on ${when(staff.phone_linked_at)}.${staff.phone_last_used_at ? ` Last used ${when(staff.phone_last_used_at)}.` : ''}`
+          : staff.phone_invited
+            ? `A link was sent. It works until ${when(staff.phone_invite_expires)} or until it’s opened on a phone.`
+            : 'Email them a personal link. They open it on their phone and sign in or out with one tap.'}
+      </p>
+      {url && <input className="a-input" readOnly value={url} onFocus={(e) => e.target.select()} aria-label="Phone sign-in link" />}
+      {msg && <div className={`a-msg ${msg.kind}`}>{msg.text}</div>}
+      {changedEmail && <div className="a-msg warn">Save the new email address first, then send the link.</div>}
+      <div className="a-row">
+        {staff.email && !changedEmail && <button type="button" className="a-btn sm primary" disabled={busy} onClick={() => send(true)}>{staff.phone_linked ? 'Send new link (new phone)' : staff.phone_invited ? 'Send the link again' : `Email link to ${staff.email}`}</button>}
+        {!url && <button type="button" className="a-btn sm" disabled={busy} onClick={() => send(false)}>Make link to copy</button>}
+        {url && <button type="button" className="a-btn sm" onClick={copy}>Copy link</button>}
+        {(staff.phone_linked || staff.phone_invited) && <button type="button" className="a-btn sm danger" onClick={revoke}>Turn off phone sign-in</button>}
+      </div>
+    </div>
   );
 }

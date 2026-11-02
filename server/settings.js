@@ -81,6 +81,16 @@ export const DEFAULTS = {
       emailReception: false,   // daily list of who was signed out automatically
     },
   },
+  phone: {
+    enabled: true,             // staff can sign in/out from a personal phone link
+    locationCheck: true,       // only allow signing in near the site
+    lat: null,                 // site location (set in Settings › Staff phone app)
+    lng: null,
+    address: '',
+    radius: 200,               // metres
+    signOutAnywhere: true,     // signing OUT works anywhere (people forget before leaving)
+    noLocation: 'block',       // phone won't share location: block (use the reception iPad) | allow (flagged)
+  },
   privacy: {
     notice: 'We collect your details to keep everyone on site safe and to let your host know you have arrived. They are kept for 12 months, then deleted. Ask reception if you would like a copy or a correction.',
     retentionMonths: 12,

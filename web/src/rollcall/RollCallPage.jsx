@@ -1,20 +1,11 @@
-import { apiUrl, appPath } from '../tenant.js';
+import { apiUrl } from '../tenant.js';
 import { useEffect, useMemo, useState } from 'react';
 import RollCall from './RollCall.jsx';
+import { STAFF_KEY } from '../staff/StaffApp.jsx';
 
-const KEY = 'vs_warden_key';
-
-/** /rollcall — the wardens' phone app. Opened from a personal link (#key=…) or by a signed-in admin. */
+/** /rollcall — opened from a fire warden's staff phone app, or by a signed-in admin. */
 export default function RollCallPage() {
-  const [key] = useState(() => {
-    const m = /key=([A-Za-z0-9_-]+)/.exec(window.location.hash);
-    if (m) {
-      localStorage.setItem(KEY, m[1]);
-      window.history.replaceState(null, '', appPath('/rollcall')); // don't leave the key in the address bar
-      return m[1];
-    }
-    return localStorage.getItem(KEY);
-  });
+  const [key] = useState(() => { try { return localStorage.getItem(STAFF_KEY); } catch { return null; } });
 
   // Make "Add to Home Screen" install the roll call (not the reception kiosk).
   useEffect(() => {
@@ -25,6 +16,6 @@ export default function RollCallPage() {
     document.querySelector('meta[name="theme-color"]')?.setAttribute('content', '#B91C1C');
   }, []);
 
-  const headers = useMemo(() => (key ? { 'X-Warden-Token': key } : {}), [key]);
+  const headers = useMemo(() => (key ? { 'X-Staff-Token': key } : {}), [key]);
   return <RollCall headers={headers} storageKey="vs_rc" />;
 }
